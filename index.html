@@ -36,10 +36,16 @@
             <p class="eyebrow">CAPITAL CYCLE</p>
             <h2>Tap a station to expand</h2>
           </div>
-          <div class="legend">
-            <span><i class="legend-dot inflow"></i>Inflow</span>
-            <span><i class="legend-dot outflow"></i>Outflow</span>
-            <span><i class="legend-dot neutral"></i>Neutral</span>
+          <div class="cycle-controls">
+            <div class="legend">
+              <span><i class="legend-dot inflow"></i>Inflow</span>
+              <span><i class="legend-dot outflow"></i>Outflow</span>
+              <span><i class="legend-line projected"></i>Projected route</span>
+            </div>
+            <div class="view-toggles" aria-label="map layers">
+              <button id="projectedToggle" class="toggle-btn active" type="button" aria-pressed="true">Projected</button>
+              <button id="futuresToggle" class="toggle-btn" type="button" aria-pressed="false">Futures overlay</button>
+            </div>
           </div>
         </div>
 
@@ -49,9 +55,14 @@
               <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
                 <path d="M0,0 L0,6 L7,3 z" class="arrow-head"></path>
               </marker>
+              <marker id="projectedArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L7,3 z" class="projected-arrow-head"></path>
+              </marker>
             </defs>
             <circle cx="350" cy="350" r="235" class="orbit"></circle>
             <g id="edges"></g>
+            <g id="projectedEdges"></g>
+            <g id="futureLayer"></g>
             <g id="nodes"></g>
             <g class="core">
               <circle cx="350" cy="350" r="100"></circle>
@@ -94,6 +105,15 @@
     <div class="section-block">
       <h3>Possible next destinations</h3>
       <div id="nextList"></div>
+    </div>
+
+    <div class="section-block">
+      <div class="section-title-row">
+        <h3>Futures influence</h3>
+        <span class="layer-label">overlay</span>
+      </div>
+      <p class="section-note">Derivatives are treated as an execution / positioning layer, not a capital destination.</p>
+      <div id="futureList"></div>
     </div>
   </aside>
   <div id="backdrop" class="backdrop"></div>
