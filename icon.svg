@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="116" fill="#07111f"/>
+  <circle cx="256" cy="256" r="160" fill="none" stroke="#24425f" stroke-width="28"/>
+  <path d="M256 96a160 160 0 0 1 156 124" fill="none" stroke="#35d07f" stroke-width="32" stroke-linecap="round"/>
+  <path d="M406 185l15 58-59-11" fill="#35d07f"/>
+  <circle cx="256" cy="96" r="28" fill="#56d8e8"/>
+  <circle cx="404" cy="298" r="28" fill="#35d07f"/>
+  <circle cx="177" cy="394" r="28" fill="#f5b942"/>
+  <circle cx="111" cy="209" r="28" fill="#ff6174"/>
+  <circle cx="256" cy="256" r="88" fill="#0d1a2a" stroke="#55a6ff" stroke-width="8"/>
+  <text x="256" y="270" text-anchor="middle" fill="#eef5ff" font-size="54" font-family="Arial, sans-serif" font-weight="700">FLOW</text>
+</svg>
