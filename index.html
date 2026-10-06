@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#08111f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Capital Flow" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>Global Capital Flow</title>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">GLOBAL CAPITAL FLOW</p>
+        <h1>Where is money now?</h1>
+      </div>
+      <div class="status-pill"><span class="dot"></span><span id="updated">Snapshot</span></div>
+    </header>
+
+    <main>
+      <section class="summary-grid" aria-label="market summary">
+        <article><span>Regime</span><strong id="regime">Transition</strong></article>
+        <article><span>Risk appetite</span><strong id="riskScore">64</strong></article>
+        <article><span>Liquidity</span><strong id="liquidityScore">72</strong></article>
+        <article><span>Dominant route</span><strong id="dominantRoute">Cash → Stocks</strong></article>
+      </section>
+
+      <section class="cycle-card">
+        <div class="cycle-head">
+          <div>
+            <p class="eyebrow">CAPITAL CYCLE</p>
+            <h2>Tap a station to expand</h2>
+          </div>
+          <div class="legend">
+            <span><i class="legend-dot inflow"></i>Inflow</span>
+            <span><i class="legend-dot outflow"></i>Outflow</span>
+            <span><i class="legend-dot neutral"></i>Neutral</span>
+          </div>
+        </div>
+
+        <div class="cycle-wrap">
+          <svg id="flowSvg" viewBox="0 0 700 700" role="img" aria-label="Global capital flow cycle">
+            <defs>
+              <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L7,3 z" class="arrow-head"></path>
+              </marker>
+            </defs>
+            <circle cx="350" cy="350" r="235" class="orbit"></circle>
+            <g id="edges"></g>
+            <g id="nodes"></g>
+            <g class="core">
+              <circle cx="350" cy="350" r="100"></circle>
+              <text x="350" y="330" text-anchor="middle">GLOBAL</text>
+              <text x="350" y="360" text-anchor="middle">LIQUIDITY</text>
+              <text id="coreState" x="350" y="392" text-anchor="middle" class="core-state">RISK-ON 64</text>
+            </g>
+          </svg>
+        </div>
+      </section>
+
+      <section class="routes-card">
+        <div>
+          <p class="eyebrow">ACTIVE ROUTES</p>
+          <h2>Strongest inferred paths</h2>
+        </div>
+        <div id="routeList" class="route-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <aside id="detailPanel" class="detail-panel" aria-hidden="true">
+    <button id="closePanel" class="close-btn" aria-label="Close">×</button>
+    <p class="eyebrow" id="detailType">STATION</p>
+    <h2 id="detailTitle">USD Cash</h2>
+    <p id="detailDesc" class="detail-desc"></p>
+
+    <div class="metric-grid">
+      <article><span>Flow</span><strong id="detailFlow"></strong></article>
+      <article><span>Velocity</span><strong id="detailVelocity"></strong></article>
+      <article><span>Confidence</span><strong id="detailConfidence"></strong></article>
+      <article><span>Crowding</span><strong id="detailCrowding"></strong></article>
+    </div>
+
+    <div class="section-block">
+      <h3>Evidence</h3>
+      <div id="evidenceList"></div>
+    </div>
+
+    <div class="section-block">
+      <h3>Possible next destinations</h3>
+      <div id="nextList"></div>
+    </div>
+  </aside>
+  <div id="backdrop" class="backdrop"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
