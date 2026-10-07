@@ -125,3 +125,8 @@ h2{font-size:20px}
 @media(max-width:760px){
   .backdrop.show{opacity:.24}
 }
+
+.institutional-item{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:start;padding:11px 0;border-bottom:1px solid rgba(31,48,70,.65)}
+.institutional-item span{color:var(--muted);font-size:11px;line-height:1.45}
+.institutional-value{text-align:right;min-width:90px}
+.institutional-value b{display:block;font-size:12px;margin-bottom:5px;color:var(--text)}
