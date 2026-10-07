@@ -19,15 +19,15 @@
         <p class="eyebrow">GLOBAL CAPITAL FLOW</p>
         <h1>Where is money now?</h1>
       </div>
-      <div class="status-pill"><span class="dot"></span><span id="updated">Snapshot</span></div>
+      <div class="status-pill"><span class="dot"></span><span id="updated">Loading live snapshot</span></div>
     </header>
 
     <main>
       <section class="summary-grid" aria-label="market summary">
         <article><span>Regime</span><strong id="regime">Transition</strong></article>
-        <article><span>Risk appetite</span><strong id="riskScore">64</strong></article>
-        <article><span>Liquidity</span><strong id="liquidityScore">72</strong></article>
-        <article><span>Dominant route</span><strong id="dominantRoute">Cash → Stocks</strong></article>
+        <article><span>Risk appetite</span><strong id="riskScore">50</strong></article>
+        <article><span>Liquidity</span><strong id="liquidityScore">50</strong></article>
+        <article><span>Dominant route</span><strong id="dominantRoute">Loading</strong></article>
       </section>
 
       <section class="cycle-card">
@@ -38,9 +38,9 @@
           </div>
           <div class="cycle-controls">
             <div class="legend">
-              <span><i class="legend-dot inflow"></i>Inflow</span>
-              <span><i class="legend-dot outflow"></i>Outflow</span>
-              <span><i class="legend-line projected"></i>Projected route</span>
+              <span><i class="legend-dot inflow"></i>Inflow proxy</span>
+              <span><i class="legend-dot outflow"></i>Outflow proxy</span>
+              <span><i class="legend-line projected"></i>Inferred route</span>
             </div>
             <div class="view-toggles" aria-label="map layers">
               <button id="projectedToggle" class="toggle-btn active" type="button" aria-pressed="true">Projected</button>
@@ -68,7 +68,7 @@
               <circle cx="350" cy="350" r="100"></circle>
               <text x="350" y="330" text-anchor="middle">GLOBAL</text>
               <text x="350" y="360" text-anchor="middle">LIQUIDITY</text>
-              <text id="coreState" x="350" y="392" text-anchor="middle" class="core-state">RISK-ON 64</text>
+              <text id="coreState" x="350" y="392" text-anchor="middle" class="core-state">LOADING</text>
             </g>
           </svg>
         </div>
@@ -91,10 +91,10 @@
     <p id="detailDesc" class="detail-desc"></p>
 
     <div class="metric-grid">
-      <article><span>Flow</span><strong id="detailFlow"></strong></article>
+      <article><span>Flow proxy</span><strong id="detailFlow"></strong></article>
       <article><span>Velocity</span><strong id="detailVelocity"></strong></article>
       <article><span>Confidence</span><strong id="detailConfidence"></strong></article>
-      <article><span>Crowding</span><strong id="detailCrowding"></strong></article>
+      <article><span>Crowding proxy</span><strong id="detailCrowding"></strong></article>
     </div>
 
     <div class="section-block">
@@ -118,6 +118,7 @@
   </aside>
   <div id="backdrop" class="backdrop"></div>
 
-  <script src="./app.js"></script>
+  <script src="./snapshot.js"></script>
+  <script src="./app-live.js"></script>
 </body>
 </html>
