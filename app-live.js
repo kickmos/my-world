@@ -51,7 +51,18 @@ SNAPSHOT.stations.forEach((station,i)=>{
 function createNode(station,i){
   const p=points[i],g=document.createElementNS("http://www.w3.org/2000/svg","g");
   g.setAttribute("class",`node ${station.state}`); g.setAttribute("data-station-id",station.id); g.setAttribute("tabindex","0"); g.setAttribute("role","button"); g.setAttribute("aria-label",station.name); g.setAttribute("transform",`translate(${p.x},${p.y})`);
-  g.innerHTML=`<circle r="${nodeRadius}"></circle><text text-anchor="middle" y="-3">${station.short}</text><text class="sub" text-anchor="middle" y="17">${station.flow} • ${station.confidence}%</text>`;
+  const newsCount=(station.news||[]).filter(n=>!n.error).length;
+  g.innerHTML=`<circle r="${nodeRadius}"></circle><text text-anchor="middle" y="-3">${station.short}</text><text class="sub" text-anchor="middle" y="17">${station.flow} • ${station.confidence}%</text>
+    <g class="node-news" transform="translate(36,-36)" tabindex="0" role="button" aria-label="News for ${station.name}">
+      <circle r="12"></circle>
+      <path d="M 2 -8 L -5 1 L 0 1 L -3 8 L 7 -3 L 1 -3 Z"></path>
+      <text class="news-count" x="11" y="-9" text-anchor="middle">${newsCount?Math.min(newsCount,9):""}</text>
+    </g>`;
+  const newsBadge=g.querySelector(".node-news");
+  if(newsBadge){
+    newsBadge.addEventListener("click",e=>{e.stopPropagation();openNews(station)});
+    newsBadge.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();openNews(station)}});
+  }
   g.addEventListener("click",()=>openStation(station));
   g.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openStation(station)}});
   nodesG.appendChild(g);
