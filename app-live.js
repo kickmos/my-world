@@ -147,11 +147,13 @@ function openStation(station){
       <p class="future-explain">${item.note||""}</p>
       <div class="future-metrics">
         <div><span>Price 1D</span><b>${pct(item.priceChange1D)}</b></div>
+        <div><span>COT-week price</span><b>${pct(item.priceChangeCotWeek)}</b></div>
         <div><span>Price 5D</span><b>${pct(item.priceChange5D)}</b></div>
         <div><span>Volume</span><b>${fmt(item.volume)}</b></div>
         <div><span>Vol / 5D avg</span><b>${item.volumeRatio==null?"n/a":Number(item.volumeRatio).toFixed(2)+"×"}</b></div>
         <div><span>Open interest</span><b>${fmt(item.openInterest)}</b></div>
         <div><span>ΔOI weekly</span><b>${fmt(item.deltaOI)}</b></div>
+        <div><span>ΔOI %</span><b>${item.deltaOIPct==null?"n/a":pct(item.deltaOIPct)}</b></div>
       </div>
       <div class="cot-block">
         <div class="cot-title"><span>CFTC COT</span><em>${item.reportDate||"date unavailable"}</em></div>
