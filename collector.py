@@ -125,6 +125,8 @@ def fetch_yahoo(symbol):
         "volume": (volumes[-1] if volumes and volumes[-1] not in (0, None) else None),
         "avg_volume_5d": avg_vol,
         "volume_ratio": vr, "market_time": meta.get("regularMarketTime"),
+        "open_interest": meta.get("openInterest"),
+        "exchange_delay": meta.get("exchangeDataDelayedBy"),
         "currency": meta.get("currency"), "source": "Yahoo Finance chart endpoint",
         "history": history,
     }
@@ -934,7 +936,16 @@ def main():
     fred = {key: safe_fred(series) for key, series in FRED_SERIES.items()}
     stable = safe_stablecoins()
     history_seed = load_previous_history()
-    yahoo_fut_quotes = safe_yahoo_quote_snapshot([SYMBOLS[k] for k in ("nq","es","zn","gc","btcf","dxy")])
+    yahoo_fut_quotes = {
+        markets[k].get("symbol"): {
+            "symbol": markets[k].get("symbol"),
+            "openInterest": markets[k].get("open_interest"),
+            "volume": markets[k].get("volume"),
+            "marketTime": markets[k].get("market_time"),
+            "exchangeDelay": markets[k].get("exchange_delay"),
+            "source":"Yahoo Finance chart metadata"
+        } for k in ("nq","es","zn","gc","btcf","dxy")
+    }
     cme_daily = {"source":"disabled","contracts":{},"error":"CME binary download blocked from GitHub runner; Yahoo delayed OI is used instead"}
     tff_rows = safe_socrata(CFTC_DATASETS["tff_futures"], 800)
     legacy_rows = safe_socrata(CFTC_DATASETS["legacy_futures"], 800)
@@ -1101,7 +1112,7 @@ def main():
         "newsItems":sum(len(v) for v in news_by_station.values()),
         "cftcTffRows":len(tff_rows),"cftcLegacyRows":len(legacy_rows),
         "dailyOiQuotes":sum(1 for k in ("nq","es","zn","gc","btcf","dxy") if (yahoo_fut_quotes.get(SYMBOLS[k]) or {}).get("openInterest") is not None),
-        "dailyOiError":yahoo_fut_quotes.get("_error"),
+        "dailyOiSource":"Yahoo chart metadata",
         "cmeDailyDisabled":True
     },ensure_ascii=False))
 
