@@ -9,7 +9,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
 from email.utils import parsedate_to_datetime
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 UA = {"User-Agent": "Mozilla/5.0 capital-flow-monitor/2.0"}
 
@@ -219,16 +219,27 @@ def http_bytes(url, timeout=20, referer=None):
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()
 
-def latest_cme_daily_url():
+def fetch_latest_cme_daily_workbook():
     directory = "https://www.cmegroup.com/ftp/pub/pub/daily_volume/"
+    last_error = None
+    now = datetime.now(timezone.utc)
+    for offset in range(0, 14):
+        d = (now - timedelta(days=offset)).strftime("%Y%m%d")
+        url = directory + "daily_volume_" + d + ".xlsx"
+        try:
+            raw = http_bytes(url, 15, "https://www.cmegroup.com/market-data/volume-open-interest.html")
+            if raw[:2] == b"PK":
+                return url, raw
+        except Exception as e:
+            last_error = e
     try:
-        html = http_bytes(directory, 15, "https://www.cmegroup.com/").decode("utf-8","ignore")
-        names = sorted(set(__import__("re").findall(r'daily_volume_(20\d{6})\.xlsx', html)))
-        if names:
-            return directory + "daily_volume_" + names[-1] + ".xlsx"
-    except Exception:
-        pass
-    return directory + "daily_volume.xlsx"
+        url = directory + "daily_volume.xlsx"
+        raw = http_bytes(url, 15, "https://www.cmegroup.com/market-data/volume-open-interest.html")
+        if raw[:2] == b"PK":
+            return url, raw
+    except Exception as e:
+        last_error = e
+    raise RuntimeError(f"CME daily workbook unavailable: {last_error}")
 
 def xlsx_rows(raw):
     rows = []
@@ -286,8 +297,7 @@ def _to_number(v):
     except Exception: return None
 
 def fetch_cme_daily_voi():
-    daily_url = latest_cme_daily_url()
-    raw = http_bytes(daily_url, 25, "https://www.cmegroup.com/market-data/volume-open-interest.html")
+    daily_url, raw = fetch_latest_cme_daily_workbook()
     rows = xlsx_rows(raw)
     if not rows:
         raise ValueError("CME daily workbook contained no rows")
