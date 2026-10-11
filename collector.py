@@ -197,7 +197,7 @@ def safe_stablecoins():
         return {"error": str(e), "source": "unavailable"}
 
 
-CME_DAILY_URL = "https://www.cmegroup.com/ftp/pub/pub/daily_volume/daily_volume.xlsx"
+CME_DAILY_URL = "https://www.cmegroup.com/ftp/pub/pub/daily_volume/"
 CME_PRODUCT_ALIASES = {
     "nq": ["E-mini Nasdaq-100 Futures", "E-mini Nasdaq 100 Futures"],
     "es": ["E-mini S&P 500 Index Futures", "E-mini S&P 500 Futures"],
@@ -206,10 +206,29 @@ CME_PRODUCT_ALIASES = {
     "gc": ["Gold Futures"],
 }
 
-def http_bytes(url, timeout=20):
-    req = urllib.request.Request(url, headers=UA)
+def http_bytes(url, timeout=20, referer=None):
+    headers = dict(UA)
+    headers.update({
+        "Accept":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/octet-stream;q=0.9,*/*;q=0.8",
+        "Accept-Language":"en-US,en;q=0.9",
+        "Cache-Control":"no-cache",
+    })
+    if referer:
+        headers["Referer"] = referer
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()
+
+def latest_cme_daily_url():
+    directory = "https://www.cmegroup.com/ftp/pub/pub/daily_volume/"
+    try:
+        html = http_bytes(directory, 15, "https://www.cmegroup.com/").decode("utf-8","ignore")
+        names = sorted(set(__import__("re").findall(r'daily_volume_(20\d{6})\.xlsx', html)))
+        if names:
+            return directory + "daily_volume_" + names[-1] + ".xlsx"
+    except Exception:
+        pass
+    return directory + "daily_volume.xlsx"
 
 def xlsx_rows(raw):
     rows = []
@@ -267,7 +286,8 @@ def _to_number(v):
     except Exception: return None
 
 def fetch_cme_daily_voi():
-    raw = http_bytes(CME_DAILY_URL, 25)
+    daily_url = latest_cme_daily_url()
+    raw = http_bytes(daily_url, 25, "https://www.cmegroup.com/market-data/volume-open-interest.html")
     rows = xlsx_rows(raw)
     if not rows:
         raise ValueError("CME daily workbook contained no rows")
@@ -280,7 +300,7 @@ def fetch_cme_daily_voi():
             header, header_idx = row, i
             break
 
-    result = {"source":"CME Group daily_volume.xlsx","tradeDate":None,"contracts":{}}
+    result = {"source":"CME Group daily volume workbook","sourceUrl":daily_url,"tradeDate":None,"contracts":{}}
 
     for row in rows[:20]:
         joined = " ".join(str(x) for x in row)
