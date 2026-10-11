@@ -287,17 +287,26 @@ def future_signal(m):
     return "neutral"
 
 CFTC_DATASETS = {
-    "tff_combined": "yw9f-hn96",
-    "legacy_combined": "jun7-fc8e",
+    "tff_futures": "gpe5-46if",
+    "legacy_futures": "6dca-aqww",
+}
+
+CFTC_CODES = {
+    "nq": "209742",   # Nasdaq Mini / E-mini Nasdaq-100
+    "es": "13874A",   # E-mini S&P 500
+    "zn": "043602",   # UST 10Y Note
+    "dxy": "098662",  # USD Index
+    "btcf": "133741", # CME Bitcoin
+    "gc": "088691",   # COMEX Gold
 }
 
 CFTC_MATCH = {
-    "nq": ["NASDAQ-100", "NASDAQ 100", "NASDAQ MINI"],
-    "es": ["S&P 500", "E-MINI S&P", "S&P 500 CONSOLIDATED"],
-    "zn": ["10-YEAR U.S. TREASURY", "10 YEAR U.S. TREASURY", "10-YEAR TREASURY"],
-    "dxy": ["U.S. DOLLAR INDEX", "US DOLLAR INDEX"],
-    "btcf": ["BITCOIN", "CME BITCOIN"],
-    "gc": ["GOLD", "COMEX GOLD"],
+    "nq": ["NASDAQ MINI", "NASDAQ-100"],
+    "es": ["E-MINI S&P 500", "S&P 500 CONSOLIDATED"],
+    "zn": ["UST 10Y NOTE", "10Y NOTE"],
+    "dxy": ["USD INDEX", "U.S. DOLLAR INDEX"],
+    "btcf": ["BITCOIN - CHICAGO MERCANTILE EXCHANGE", "BITCOIN"],
+    "gc": ["GOLD - COMMODITY EXCHANGE", "GOLD"],
 }
 
 def _num(row, *names):
@@ -331,14 +340,18 @@ def safe_socrata(dataset_id, limit=5000):
     except Exception:
         return []
 
-def find_cftc_row(rows, aliases):
+def find_cftc_row(rows, code, aliases):
+    code_u = (code or "").strip().upper()
+    for row in rows:
+        row_code = _txt(row, "cftc_contract_market_code").strip().upper()
+        if code_u and row_code == code_u:
+            return row
     best = None
     for row in rows:
         name = (_txt(row, "market_and_exchange_names", "contract_market_name", "commodity_name") or "").upper()
         if any(alias.upper() in name for alias in aliases):
             if best is None:
                 best = row
-            # Prefer CME/CBOT/COMEX records when duplicates exist.
             if any(ex in name for ex in ("CHICAGO MERCANTILE", "CHICAGO BOARD", "COMMODITY EXCHANGE", "CME", "CBOT", "COMEX")):
                 return row
     return best
@@ -414,7 +427,7 @@ def classify_positioning(price_change_pct, delta_oi):
 def futures_positioning(markets, tff_rows, legacy_rows):
     out = {}
     for key in ("nq","es","zn","dxy","btcf"):
-        row = find_cftc_row(tff_rows, CFTC_MATCH[key])
+        row = find_cftc_row(tff_rows, CFTC_CODES[key], CFTC_MATCH[key])
         cot = extract_tff(row)
         m = markets[key]
         pos = classify_positioning(m.get("r5",0), cot.get("deltaOI") if cot else None)
@@ -429,10 +442,10 @@ def futures_positioning(markets, tff_rows, legacy_rows):
             "cot": cot,
             "positioning": pos,
             "horizon":"5D price vs weekly CFTC ΔOI",
-            "source":"Yahoo market proxy + CFTC TFF Combined"
+            "source":"Yahoo market proxy + CFTC TFF Futures Only"
         }
 
-    row = find_cftc_row(legacy_rows, CFTC_MATCH["gc"])
+    row = find_cftc_row(legacy_rows, CFTC_CODES["gc"], CFTC_MATCH["gc"])
     cot = extract_legacy(row)
     m = markets["gc"]
     pos = classify_positioning(m.get("r5",0), cot.get("deltaOI") if cot else None)
@@ -447,7 +460,7 @@ def futures_positioning(markets, tff_rows, legacy_rows):
         "cot":cot,
         "positioning":pos,
         "horizon":"5D price vs weekly CFTC ΔOI",
-        "source":"Yahoo market proxy + CFTC Legacy Combined"
+        "source":"Yahoo market proxy + CFTC Legacy Futures Only"
     }
     return out
 
@@ -611,8 +624,8 @@ def main():
 
     fred = {key: safe_fred(series) for key, series in FRED_SERIES.items()}
     stable = safe_stablecoins()
-    tff_rows = safe_socrata(CFTC_DATASETS["tff_combined"], 800)
-    legacy_rows = safe_socrata(CFTC_DATASETS["legacy_combined"], 800)
+    tff_rows = safe_socrata(CFTC_DATASETS["tff_futures"], 800)
+    legacy_rows = safe_socrata(CFTC_DATASETS["legacy_futures"], 800)
     futpos = futures_positioning(markets, tff_rows, legacy_rows)
     news_by_station = {}
     for sid, query in NEWS_QUERIES.items():
