@@ -611,8 +611,8 @@ def main():
 
     fred = {key: safe_fred(series) for key, series in FRED_SERIES.items()}
     stable = safe_stablecoins()
-    tff_rows = safe_socrata(CFTC_DATASETS["tff_combined"], 6000)
-    legacy_rows = safe_socrata(CFTC_DATASETS["legacy_combined"], 6000)
+    tff_rows = safe_socrata(CFTC_DATASETS["tff_combined"], 800)
+    legacy_rows = safe_socrata(CFTC_DATASETS["legacy_combined"], 800)
     futpos = futures_positioning(markets, tff_rows, legacy_rows)
     news_by_station = {}
     for sid, query in NEWS_QUERIES.items():
