@@ -197,7 +197,7 @@ def safe_stablecoins():
         return {"error": str(e), "source": "unavailable"}
 
 
-CME_DAILY_URL = "https://www.cmegroup.com/ftp/daily_volume/daily_volume.xlsx"
+CME_DAILY_URL = "https://www.cmegroup.com/ftp/pub/pub/daily_volume/daily_volume.xlsx"
 CME_PRODUCT_ALIASES = {
     "nq": ["E-mini Nasdaq-100 Futures", "E-mini Nasdaq 100 Futures"],
     "es": ["E-mini S&P 500 Index Futures", "E-mini S&P 500 Futures"],
