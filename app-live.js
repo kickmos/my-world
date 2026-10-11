@@ -96,16 +96,40 @@ function renderFutureLayer(){
 renderFutureLayer();
 
 const panel=document.getElementById("detailPanel"),backdrop=document.getElementById("backdrop");
+const newsSheet=document.getElementById("newsSheet"),newsBackdrop=document.getElementById("newsBackdrop");
+const esc=s=>String(s??"").replace(/[&<>"\']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","\'":"&#039;"}[ch]));
+function relativeTime(iso,ageHours){
+  if(iso){
+    const ms=Date.now()-new Date(iso).getTime();
+    if(Number.isFinite(ms)){const h=Math.max(0,ms/3600000);if(h<1)return Math.max(1,Math.round(h*60))+"m ago";if(h<24)return Math.round(h)+"h ago";return Math.round(h/24)+"d ago";}
+  }
+  if(ageHours!=null){if(ageHours<1)return Math.max(1,Math.round(ageHours*60))+"m ago";if(ageHours<24)return Math.round(ageHours)+"h ago";return Math.round(ageHours/24)+"d ago";}
+  return "";
+}
+function openNews(station){
+  if(!station)return;
+  document.getElementById("newsTitle").textContent="Headlines for "+station.name;
+  document.getElementById("newsUpdated").textContent="Snapshot "+SNAPSHOT.updated+" • best-effort free feed";
+  const items=station.news||[];
+  document.getElementById("newsList").innerHTML=items.length?items.map(item=>{
+    const meta=[relativeTime(item.publishedAt,item.ageHours),item.source].filter(Boolean).join(" • ");
+    const badge=item.trusted?'<span class="news-source-badge">source-ranked</span>':"";
+    if(item.error||!item.url)return '<article class="news-item muted"><div class="news-meta">'+esc(meta)+'</div><h3>'+esc(item.title||"News unavailable")+'</h3></article>';
+    return '<a class="news-item" href="'+esc(item.url)+'" target="_blank" rel="noopener noreferrer"><div class="news-meta">'+esc(meta)+" "+badge+'</div><h3>'+esc(item.title)+'</h3></a>';
+  }).join(""):'<article class="news-item muted"><h3>No recent headlines in this snapshot</h3></article>';
+  newsSheet.classList.add("open");newsBackdrop.classList.add("show");newsSheet.setAttribute("aria-hidden","false");
+}
+function closeNews(){newsSheet.classList.remove("open");newsBackdrop.classList.remove("show");newsSheet.setAttribute("aria-hidden","true");}
 function openStation(station){
   activeStation=station;renderProjectedRoutes(station);document.getElementById("detailTitle").textContent=station.name;document.getElementById("detailDesc").textContent=station.desc;document.getElementById("detailFlow").textContent=station.flow;document.getElementById("detailVelocity").textContent=station.velocity;document.getElementById("detailConfidence").textContent=station.confidence+"%";document.getElementById("detailCrowding").textContent=station.crowding+"%";
   document.getElementById("evidenceList").innerHTML=(station.evidence||[]).map(([name,type,note])=>`<div class="evidence"><div class="evidence-top"><strong>${name}</strong><span class="badge ${type.toLowerCase()}">${type}</span></div><p>${note}</p></div>`).join("");
   document.getElementById("institutionalList").innerHTML=(station.institutional||[]).map(item=>`<div class="institutional-item"><div><strong>${item.name}</strong><br><span>${item.note||""}</span></div><div class="institutional-value"><b>${item.value||""}</b><span class="future-state ${item.signal||"neutral"}">${item.signal||"neutral"}</span></div></div>`).join("")||`<div class="institutional-item"><span>No institutional confirmation wired yet</span></div>`;
   document.getElementById("nextList").innerHTML=(station.next||[]).map(r=>`<div class="next-row"><strong>${r.label}</strong><span>${r.probability}% inferred route</span></div>`).join("")||`<div class="next-row"><span>No route estimate yet</span></div>`;
   document.getElementById("futureList").innerHTML=(station.futures||[]).map(item=>`<div class="future-item"><div><strong>${item.name}</strong><br><span>${item.note}</span></div><span class="future-state ${item.signal}">${item.signal}</span></div>`).join("")||`<div class="future-item"><span>No futures proxy yet</span></div>`;
-  panel.classList.add("open");backdrop.classList.add("show");panel.setAttribute("aria-hidden","false");
+  panel.classList.add("open");backdrop.classList.add("show");panel.setAttribute("aria-hidden","false");\n  const newsBtn=document.getElementById("openNewsFromDetail");if(newsBtn)newsBtn.onclick=()=>openNews(station);
 }
 function closePanel(){panel.classList.remove("open");backdrop.classList.remove("show");panel.setAttribute("aria-hidden","true");activeStation=null;clearProjectedRoutes()}
-document.getElementById("closePanel").addEventListener("click",closePanel);backdrop.addEventListener("click",closePanel);document.addEventListener("keydown",e=>{if(e.key==="Escape")closePanel()});
+document.getElementById("closePanel").addEventListener("click",closePanel);backdrop.addEventListener("click",closePanel);document.getElementById("closeNews").addEventListener("click",closeNews);newsBackdrop.addEventListener("click",closeNews);document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeNews();closePanel()}});
 
 const projectedToggle=document.getElementById("projectedToggle");projectedToggle.addEventListener("click",()=>{projectedEnabled=!projectedEnabled;projectedToggle.classList.toggle("active",projectedEnabled);projectedToggle.setAttribute("aria-pressed",String(projectedEnabled));if(activeStation)renderProjectedRoutes(activeStation);else clearProjectedRoutes()});
 const futuresToggle=document.getElementById("futuresToggle");futuresToggle.addEventListener("click",()=>{futuresEnabled=!futuresEnabled;futuresToggle.classList.toggle("active",futuresEnabled);futuresToggle.setAttribute("aria-pressed",String(futuresEnabled));svg.classList.toggle("future-layer-on",futuresEnabled)});
