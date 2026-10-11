@@ -157,3 +157,32 @@ h2{font-size:20px}
   .news-sheet{max-height:82dvh;padding-inline:18px}
   .news-item h3{font-size:18px}
 }
+
+.future-card{padding:14px 0 16px;border-bottom:1px solid rgba(31,48,70,.72)}
+.future-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.future-card-head strong{font-size:14px}
+.future-horizon{display:block;margin-top:4px;color:var(--muted);font-size:10px}
+.positioning-pill{display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;padding:5px 8px;border-radius:999px;font-size:9px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line)}
+.positioning-pill.positive{color:var(--green);border-color:rgba(53,208,127,.35);background:rgba(53,208,127,.08)}
+.positioning-pill.negative{color:var(--red);border-color:rgba(255,97,116,.35);background:rgba(255,97,116,.08)}
+.positioning-pill.neutral{color:var(--amber);border-color:rgba(245,185,66,.35);background:rgba(245,185,66,.08)}
+.future-explain{margin:9px 0 11px;color:var(--muted);font-size:11px;line-height:1.45}
+.future-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.future-metrics div{padding:9px;border:1px solid rgba(31,48,70,.8);border-radius:10px;background:#081320}
+.future-metrics span{display:block;color:var(--muted);font-size:9px;margin-bottom:3px}
+.future-metrics b{font-size:12px}
+.cot-block{margin-top:10px;padding:10px;border:1px solid rgba(90,104,126,.28);border-radius:12px;background:#09111d}
+.cot-title{display:flex;justify-content:space-between;gap:10px;margin-bottom:6px}
+.cot-title span{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#cbd8e8}
+.cot-title em{font-size:9px;color:var(--muted);font-style:normal}
+.cot-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;padding:6px 0;border-top:1px solid rgba(31,48,70,.45);align-items:center}
+.cot-row span{font-size:10px;color:var(--muted)}
+.cot-row b{font-size:11px}
+.cot-row em{font-size:9px;color:var(--muted);font-style:normal}
+.cot-empty{font-size:10px;color:var(--muted)}
+.future-source{margin-top:8px;color:#66778c;font-size:9px}
+@media(max-width:760px){
+  .future-metrics{grid-template-columns:repeat(2,1fr)}
+  .cot-row{grid-template-columns:1fr auto}
+  .cot-row em{grid-column:1/-1}
+}
