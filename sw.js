@@ -1,4 +1,4 @@
-const CACHE="capital-flow-v3";
+const CACHE="capital-flow-v4";
 const ASSETS=["./","./index.html","./styles.css","./app-live.js","./manifest.webmanifest","./icon.svg"];
 self.addEventListener("install",event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS))));
 self.addEventListener("activate",event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));
