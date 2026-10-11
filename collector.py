@@ -129,6 +129,33 @@ def fetch_yahoo(symbol):
         "history": history,
     }
 
+def fetch_yahoo_quote_snapshot(symbols):
+    params = urllib.parse.urlencode({"symbols": ",".join(symbols)})
+    url = f"https://query1.finance.yahoo.com/v7/finance/quote?{params}"
+    data = http_json(url, 15)
+    rows = data.get("quoteResponse", {}).get("result", [])
+    out = {}
+    for row in rows:
+        sym = row.get("symbol")
+        if not sym:
+            continue
+        out[sym] = {
+            "symbol": sym,
+            "price": row.get("regularMarketPrice"),
+            "volume": row.get("regularMarketVolume"),
+            "openInterest": row.get("openInterest"),
+            "marketTime": row.get("regularMarketTime"),
+            "exchangeDelay": row.get("exchangeDataDelayedBy"),
+            "source":"Yahoo Finance quote endpoint",
+        }
+    return out
+
+def safe_yahoo_quote_snapshot(symbols):
+    try:
+        return fetch_yahoo_quote_snapshot(symbols)
+    except Exception as e:
+        return {"_error": str(e)}
+
 def safe_fetch(symbol):
     try:
         return fetch_yahoo(symbol)
@@ -638,7 +665,45 @@ def classify_positioning(price_change_pct, delta_oi, open_interest=None):
         return {"label":"new shorts","bias":"negative","explanation":"Price fell while open interest increased"}
     return {"label":"long liquidation","bias":"negative","explanation":"Price fell while open interest decreased"}
 
-def futures_positioning(markets, tff_rows, legacy_rows, cme_daily):
+
+def previous_daily_oi(history, key, current_date):
+    for point in reversed(history or []):
+        fut = (point.get("futures") or {}).get(key) or {}
+        oi = fut.get("openInterest")
+        d = fut.get("date")
+        if oi is not None and d and d != current_date:
+            return oi, d
+    return None, None
+
+def quote_oi_layer(yahoo_fut_quotes, symbol, key, history):
+    q = yahoo_fut_quotes.get(symbol) or {}
+    oi = q.get("openInterest")
+    ts = q.get("marketTime")
+    cur_date = None
+    if ts:
+        try:
+            cur_date = datetime.fromtimestamp(int(ts), timezone.utc).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    if cur_date is None:
+        cur_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    prev_oi, prev_date = previous_daily_oi(history, key, cur_date)
+    delta = (oi - prev_oi) if oi is not None and prev_oi is not None else None
+    delta_pct = (delta / prev_oi * 100) if delta is not None and prev_oi not in (None,0) else None
+    return {
+        "openInterest":oi,
+        "prevOpenInterest":prev_oi,
+        "deltaOI":delta,
+        "deltaOIPct":delta_pct,
+        "date":cur_date,
+        "prevDate":prev_date,
+        "volume":q.get("volume"),
+        "source":"Yahoo delayed futures quote",
+        "delayMinutes":q.get("exchangeDelay"),
+        "error":yahoo_fut_quotes.get("_error"),
+    }
+
+def futures_positioning(markets, tff_rows, legacy_rows, cme_daily, yahoo_fut_quotes, history):
     out = {}
     for key in ("nq","es","zn","dxy","btcf"):
         row = find_cftc_row(tff_rows, CFTC_CODES[key], CFTC_MATCH[key])
@@ -647,8 +712,8 @@ def futures_positioning(markets, tff_rows, legacy_rows, cme_daily):
         cot_week_return = cot_aligned_return(m, cot.get("reportDate") if cot else None)
         classifier_return = cot_week_return if cot_week_return is not None else m.get("r5",0)
         weekly_pos = classify_positioning(classifier_return, cot.get("deltaOI") if cot else None, cot.get("openInterest") if cot else None)
-        daily = (cme_daily.get("contracts") or {}).get(key) or {}
-        daily_pos = classify_positioning(m.get("r1",0), daily.get("deltaOI"), daily.get("openInterest")) if daily else {"label":"unavailable","bias":"neutral","explanation":"CME daily OI unavailable"}
+        daily = quote_oi_layer(yahoo_fut_quotes, m.get("symbol"), key, history)
+        daily_pos = classify_positioning(m.get("r1",0), daily.get("deltaOI"), daily.get("openInterest")) if daily.get("openInterest") is not None else {"label":"unavailable","bias":"neutral","explanation":"Delayed futures OI unavailable"}
         out[key] = {
             "symbol": m.get("symbol"),
             "price": m.get("price"),
@@ -660,9 +725,13 @@ def futures_positioning(markets, tff_rows, legacy_rows, cme_daily):
             "volumeRatio": (round(m.get("volume_ratio",1),2) if m.get("volume") is not None else None),
             "deltaOIPct": (round(cot.get("deltaOI") / cot.get("openInterest") * 100, 3) if cot and cot.get("deltaOI") is not None and cot.get("openInterest") not in (None,0) else None),
             "dailyOI": daily.get("openInterest"),
+            "dailyPrevOI": daily.get("prevOpenInterest"),
             "dailyDeltaOI": daily.get("deltaOI"),
             "dailyVolume": daily.get("volume"),
-            "dailyOIPct": (round(daily.get("deltaOI") / daily.get("openInterest") * 100, 3) if daily.get("deltaOI") is not None and daily.get("openInterest") not in (None,0) else None),
+            "dailyOIPct": (round(daily.get("deltaOIPct"),3) if daily.get("deltaOIPct") is not None else None),
+            "dailyOIDate": daily.get("date"),
+            "dailyOIPrevDate": daily.get("prevDate"),
+            "dailyOIDelayMinutes": daily.get("delayMinutes"),
             "dailyPositioning": daily_pos,
             "cot": cot,
             "positioning": weekly_pos,
@@ -676,8 +745,8 @@ def futures_positioning(markets, tff_rows, legacy_rows, cme_daily):
     cot_week_return = cot_aligned_return(m, cot.get("reportDate") if cot else None)
     classifier_return = cot_week_return if cot_week_return is not None else m.get("r5",0)
     weekly_pos = classify_positioning(classifier_return, cot.get("deltaOI") if cot else None, cot.get("openInterest") if cot else None)
-    daily = (cme_daily.get("contracts") or {}).get("gc") or {}
-    daily_pos = classify_positioning(m.get("r1",0), daily.get("deltaOI"), daily.get("openInterest")) if daily else {"label":"unavailable","bias":"neutral","explanation":"CME daily OI unavailable"}
+    daily = quote_oi_layer(yahoo_fut_quotes, m.get("symbol"), "gc", history)
+    daily_pos = classify_positioning(m.get("r1",0), daily.get("deltaOI"), daily.get("openInterest")) if daily.get("openInterest") is not None else {"label":"unavailable","bias":"neutral","explanation":"Delayed futures OI unavailable"}
     out["gc"] = {
         "symbol":m.get("symbol"),
         "price":m.get("price"),
@@ -689,9 +758,13 @@ def futures_positioning(markets, tff_rows, legacy_rows, cme_daily):
         "volumeRatio":(round(m.get("volume_ratio",1),2) if m.get("volume") is not None else None),
         "deltaOIPct":(round(cot.get("deltaOI") / cot.get("openInterest") * 100, 3) if cot and cot.get("deltaOI") is not None and cot.get("openInterest") not in (None,0) else None),
         "dailyOI":daily.get("openInterest"),
+        "dailyPrevOI":daily.get("prevOpenInterest"),
         "dailyDeltaOI":daily.get("deltaOI"),
         "dailyVolume":daily.get("volume"),
-        "dailyOIPct":(round(daily.get("deltaOI") / daily.get("openInterest") * 100, 3) if daily.get("deltaOI") is not None and daily.get("openInterest") not in (None,0) else None),
+        "dailyOIPct":(round(daily.get("deltaOIPct"),3) if daily.get("deltaOIPct") is not None else None),
+        "dailyOIDate":daily.get("date"),
+        "dailyOIPrevDate":daily.get("prevDate"),
+        "dailyOIDelayMinutes":daily.get("delayMinutes"),
         "dailyPositioning":daily_pos,
         "cot":cot,
         "positioning":weekly_pos,
@@ -860,10 +933,12 @@ def main():
 
     fred = {key: safe_fred(series) for key, series in FRED_SERIES.items()}
     stable = safe_stablecoins()
-    cme_daily = safe_cme_daily_voi()
+    history_seed = load_previous_history()
+    yahoo_fut_quotes = safe_yahoo_quote_snapshot([SYMBOLS[k] for k in ("nq","es","zn","gc","btcf","dxy")])
+    cme_daily = {"source":"disabled","contracts":{},"error":"CME binary download blocked from GitHub runner; Yahoo delayed OI is used instead"}
     tff_rows = safe_socrata(CFTC_DATASETS["tff_futures"], 800)
     legacy_rows = safe_socrata(CFTC_DATASETS["legacy_futures"], 800)
-    futpos = futures_positioning(markets, tff_rows, legacy_rows, cme_daily)
+    futpos = futures_positioning(markets, tff_rows, legacy_rows, cme_daily, yahoo_fut_quotes, history_seed)
     news_by_station = {}
     for sid, query in NEWS_QUERIES.items():
         news_by_station[sid] = safe_news(query, 8)
@@ -926,7 +1001,11 @@ def main():
                 "deltaOIPct": d.get("deltaOIPct"),
                 "deltaOI": cot.get("deltaOI"),
                 "dailyOpenInterest": d.get("dailyOI"),
+                "dailyPrevOpenInterest": d.get("dailyPrevOI"),
                 "dailyDeltaOI": d.get("dailyDeltaOI"),
+                "dailyOIDate": d.get("dailyOIDate"),
+                "dailyOIPrevDate": d.get("dailyOIPrevDate"),
+                "dailyOIDelayMinutes": d.get("dailyOIDelayMinutes"),
                 "dailyDeltaOIPct": d.get("dailyOIPct"),
                 "dailyVolume": d.get("dailyVolume"),
                 "reportDate": cot.get("reportDate"),
@@ -981,7 +1060,7 @@ def main():
             "flow":"Market-flow proxy from price momentum, relative strength and volume participation.",
             "institutional":"Public macro/liquidity confirmation layer from FRED plus stablecoin supply; not prime-broker or custodian flow.",
             "routes":"Inferred probabilities using market attraction + confirmation scores; not observed transaction paths.",
-            "futures":"Daily CME volume/open-interest is used for daily leverage classification where available; weekly CFTC futures-only data is used for ownership/positioning. Labels are interpretive, not transaction-level proof.",
+            "futures":"Delayed Yahoo futures open interest plus stored prior-day OI is used for daily leverage classification; weekly CFTC futures-only data is used for ownership/positioning. Labels are interpretive, not transaction-level proof.",
             "news":"Per-station headlines aggregated from Google News RSS and ranked by recency plus recognized financial-news sources.",
             "cadence":"GitHub Actions target cadence: approximately hourly; scheduled runs are best-effort and may be delayed on the free service."
         }
@@ -994,11 +1073,17 @@ def main():
         json.dump(snapshot,f,ensure_ascii=False,separators=(",",":"))
         f.write(";\n")
 
-    history = load_previous_history()
+    history = history_seed
     point = {
         "t":snapshot["generatedAt"],"risk":risk_score,"liquidity":liquidity_score,
         "regime":regime,
-        "scores":{s["id"]:s["market"]["score"] for s in stations}
+        "scores":{s["id"]:s["market"]["score"] for s in stations},
+        "futures":{
+            key:{
+                "openInterest":futpos.get(key,{}).get("dailyOI"),
+                "date":futpos.get(key,{}).get("dailyOIDate")
+            } for key in ("nq","es","zn","gc","btcf","dxy")
+        }
     }
     if not history or history[-1].get("t") != point["t"]:
         history.append(point)
@@ -1015,7 +1100,9 @@ def main():
         "stablecoinsAvailable":not stable.get("error"),
         "newsItems":sum(len(v) for v in news_by_station.values()),
         "cftcTffRows":len(tff_rows),"cftcLegacyRows":len(legacy_rows),
-        "cmeDailyContracts":len((cme_daily.get("contracts") or {})),"cmeDailyError":cme_daily.get("error")
+        "dailyOiQuotes":sum(1 for k in ("nq","es","zn","gc","btcf","dxy") if (yahoo_fut_quotes.get(SYMBOLS[k]) or {}).get("openInterest") is not None),
+        "dailyOiError":yahoo_fut_quotes.get("_error"),
+        "cmeDailyDisabled":True
     },ensure_ascii=False))
 
 if __name__ == "__main__":
