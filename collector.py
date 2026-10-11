@@ -6,6 +6,7 @@ import math
 import time
 import urllib.parse
 import urllib.request
+import http.cookiejar
 import xml.etree.ElementTree as ET
 import zipfile
 from email.utils import parsedate_to_datetime
@@ -132,9 +133,33 @@ def fetch_yahoo(symbol):
     }
 
 def fetch_yahoo_quote_snapshot(symbols):
-    params = urllib.parse.urlencode({"symbols": ",".join(symbols)})
+    jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    headers = {
+        "User-Agent": UA["User-Agent"],
+        "Accept":"application/json,text/plain,*/*",
+        "Accept-Language":"en-US,en;q=0.9",
+    }
+
+    # Yahoo requires a browser cookie + crumb for v7 quote.
+    try:
+        req = urllib.request.Request("https://fc.yahoo.com", headers=headers)
+        opener.open(req, timeout=10).read()
+    except Exception:
+        pass
+
+    crumb_req = urllib.request.Request("https://query1.finance.yahoo.com/v1/test/getcrumb", headers=headers)
+    with opener.open(crumb_req, timeout=12) as r:
+        crumb = r.read().decode("utf-8").strip()
+    if not crumb:
+        raise ValueError("Yahoo crumb unavailable")
+
+    params = urllib.parse.urlencode({"symbols": ",".join(symbols), "crumb": crumb})
     url = f"https://query1.finance.yahoo.com/v7/finance/quote?{params}"
-    data = http_json(url, 15)
+    req = urllib.request.Request(url, headers=headers)
+    with opener.open(req, timeout=15) as r:
+        data = json.loads(r.read().decode("utf-8"))
+
     rows = data.get("quoteResponse", {}).get("result", [])
     out = {}
     for row in rows:
@@ -148,7 +173,7 @@ def fetch_yahoo_quote_snapshot(symbols):
             "openInterest": row.get("openInterest"),
             "marketTime": row.get("regularMarketTime"),
             "exchangeDelay": row.get("exchangeDataDelayedBy"),
-            "source":"Yahoo Finance quote endpoint",
+            "source":"Yahoo Finance authenticated quote",
         }
     return out
 
@@ -936,16 +961,20 @@ def main():
     fred = {key: safe_fred(series) for key, series in FRED_SERIES.items()}
     stable = safe_stablecoins()
     history_seed = load_previous_history()
-    yahoo_fut_quotes = {
-        markets[k].get("symbol"): {
-            "symbol": markets[k].get("symbol"),
-            "openInterest": markets[k].get("open_interest"),
-            "volume": markets[k].get("volume"),
-            "marketTime": markets[k].get("market_time"),
-            "exchangeDelay": markets[k].get("exchange_delay"),
-            "source":"Yahoo Finance chart metadata"
-        } for k in ("nq","es","zn","gc","btcf","dxy")
-    }
+    yahoo_fut_quotes = safe_yahoo_quote_snapshot([SYMBOLS[k] for k in ("nq","es","zn","gc","btcf","dxy")])
+    if yahoo_fut_quotes.get("_error"):
+        fallback_error = yahoo_fut_quotes.get("_error")
+        yahoo_fut_quotes = {
+            markets[k].get("symbol"): {
+                "symbol": markets[k].get("symbol"),
+                "openInterest": markets[k].get("open_interest"),
+                "volume": markets[k].get("volume"),
+                "marketTime": markets[k].get("market_time"),
+                "exchangeDelay": markets[k].get("exchange_delay"),
+                "source":"Yahoo Finance chart metadata fallback"
+            } for k in ("nq","es","zn","gc","btcf","dxy")
+        }
+        yahoo_fut_quotes["_fallbackError"] = fallback_error
     cme_daily = {"source":"disabled","contracts":{},"error":"CME binary download blocked from GitHub runner; Yahoo delayed OI is used instead"}
     tff_rows = safe_socrata(CFTC_DATASETS["tff_futures"], 800)
     legacy_rows = safe_socrata(CFTC_DATASETS["legacy_futures"], 800)
@@ -1112,7 +1141,8 @@ def main():
         "newsItems":sum(len(v) for v in news_by_station.values()),
         "cftcTffRows":len(tff_rows),"cftcLegacyRows":len(legacy_rows),
         "dailyOiQuotes":sum(1 for k in ("nq","es","zn","gc","btcf","dxy") if (yahoo_fut_quotes.get(SYMBOLS[k]) or {}).get("openInterest") is not None),
-        "dailyOiSource":"Yahoo chart metadata",
+        "dailyOiSource":"Yahoo authenticated quote with chart fallback",
+        "dailyOiFallbackError":yahoo_fut_quotes.get("_fallbackError"),
         "cmeDailyDisabled":True
     },ensure_ascii=False))
 
