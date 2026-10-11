@@ -7,6 +7,7 @@ import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+import zipfile
 from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
 
@@ -194,6 +195,156 @@ def safe_stablecoins():
         return fetch_stablecoins()
     except Exception as e:
         return {"error": str(e), "source": "unavailable"}
+
+
+CME_DAILY_URL = "https://www.cmegroup.com/ftp/daily_volume/daily_volume.xlsx"
+CME_PRODUCT_ALIASES = {
+    "nq": ["E-mini Nasdaq-100 Futures", "E-mini Nasdaq 100 Futures"],
+    "es": ["E-mini S&P 500 Index Futures", "E-mini S&P 500 Futures"],
+    "zn": ["10-Year T-Note Futures", "10-Year Treasury Note Futures"],
+    "btcf": ["Bitcoin Futures"],
+    "gc": ["Gold Futures"],
+}
+
+def http_bytes(url, timeout=20):
+    req = urllib.request.Request(url, headers=UA)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+def xlsx_rows(raw):
+    rows = []
+    with zipfile.ZipFile(io.BytesIO(raw)) as z:
+        shared = []
+        if "xl/sharedStrings.xml" in z.namelist():
+            root = ET.fromstring(z.read("xl/sharedStrings.xml"))
+            ns = {"a":"http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+            for si in root.findall("a:si", ns):
+                shared.append("".join(t.text or "" for t in si.findall(".//a:t", ns)))
+
+        sheet_name = "xl/worksheets/sheet1.xml"
+        if sheet_name not in z.namelist():
+            candidates = [n for n in z.namelist() if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")]
+            if not candidates:
+                return rows
+            sheet_name = sorted(candidates)[0]
+
+        root = ET.fromstring(z.read(sheet_name))
+        ns = {"a":"http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+
+        def col_idx(ref):
+            letters = "".join(ch for ch in ref if ch.isalpha())
+            n = 0
+            for ch in letters.upper():
+                n = n * 26 + ord(ch) - 64
+            return n - 1
+
+        for row in root.findall(".//a:row", ns):
+            vals = {}
+            for cell in row.findall("a:c", ns):
+                ref = cell.attrib.get("r","A1")
+                idx = col_idx(ref)
+                typ = cell.attrib.get("t")
+                v = cell.find("a:v", ns)
+                inline = cell.find("a:is", ns)
+                value = ""
+                if typ == "s" and v is not None:
+                    try: value = shared[int(v.text)]
+                    except Exception: value = ""
+                elif typ == "inlineStr" and inline is not None:
+                    value = "".join(t.text or "" for t in inline.findall(".//a:t", ns))
+                elif v is not None:
+                    value = v.text or ""
+                vals[idx] = value
+            if vals:
+                width = max(vals)+1
+                rows.append([vals.get(i,"") for i in range(width)])
+    return rows
+
+def _to_number(v):
+    if v in (None, ""): return None
+    s = str(v).replace(",","").replace("+","").strip()
+    try: return float(s)
+    except Exception: return None
+
+def fetch_cme_daily_voi():
+    raw = http_bytes(CME_DAILY_URL, 25)
+    rows = xlsx_rows(raw)
+    if not rows:
+        raise ValueError("CME daily workbook contained no rows")
+
+    header = None
+    header_idx = None
+    for i,row in enumerate(rows[:40]):
+        joined = " | ".join(str(x) for x in row).lower()
+        if "open interest" in joined and ("product" in joined or "contract" in joined):
+            header, header_idx = row, i
+            break
+
+    result = {"source":"CME Group daily_volume.xlsx","tradeDate":None,"contracts":{}}
+
+    for row in rows[:20]:
+        joined = " ".join(str(x) for x in row)
+        if "Trade Date" in joined or "Trade date" in joined:
+            result["tradeDate"] = joined.strip()
+            break
+
+    normalized_headers = [str(x).strip().lower() for x in (header or [])]
+    def hidx(*needles):
+        for i,h in enumerate(normalized_headers):
+            if any(n in h for n in needles):
+                return i
+        return None
+
+    product_i = hidx("product","contract")
+    volume_i = hidx("volume")
+    oi_i = hidx("open interest")
+    change_i = hidx("change")
+
+    search_rows = rows[(header_idx+1 if header_idx is not None else 0):]
+    for key, aliases in CME_PRODUCT_ALIASES.items():
+        matched = None
+        for row in search_rows:
+            text_cells = [str(x).strip() for x in row]
+            joined = " | ".join(text_cells).lower()
+            if any(alias.lower() in joined for alias in aliases) and "options" not in joined:
+                matched = row
+                break
+        if not matched:
+            continue
+
+        product = None
+        if product_i is not None and product_i < len(matched):
+            product = str(matched[product_i]).strip()
+        if not product:
+            product = next((str(x).strip() for x in matched if any(a.lower() in str(x).lower() for a in aliases)), aliases[0])
+
+        volume = _to_number(matched[volume_i]) if volume_i is not None and volume_i < len(matched) else None
+        oi = _to_number(matched[oi_i]) if oi_i is not None and oi_i < len(matched) else None
+        change = _to_number(matched[change_i]) if change_i is not None and change_i < len(matched) else None
+
+        # Fallback for workbooks with split/multi-row headers: take last three numeric cells.
+        nums = [_to_number(x) for x in matched]
+        nums = [x for x in nums if x is not None]
+        if oi is None and len(nums) >= 2:
+            oi = nums[-2]
+        if change is None and len(nums) >= 1:
+            change = nums[-1]
+        if volume is None and len(nums) >= 3:
+            volume = nums[-3]
+
+        result["contracts"][key] = {
+            "product":product,
+            "volume":volume,
+            "openInterest":oi,
+            "deltaOI":change,
+        }
+    return result
+
+def safe_cme_daily_voi():
+    try:
+        return fetch_cme_daily_voi()
+    except Exception as e:
+        return {"source":"CME Group daily_volume.xlsx","error":str(e),"contracts":{}}
 
 def fetch_google_news(query, limit=8):
     params = urllib.parse.urlencode({"q": query, "hl": "en-US", "gl": "US", "ceid": "US:en"})
@@ -457,7 +608,7 @@ def classify_positioning(price_change_pct, delta_oi, open_interest=None):
         return {"label":"new shorts","bias":"negative","explanation":"Price fell while open interest increased"}
     return {"label":"long liquidation","bias":"negative","explanation":"Price fell while open interest decreased"}
 
-def futures_positioning(markets, tff_rows, legacy_rows):
+def futures_positioning(markets, tff_rows, legacy_rows, cme_daily):
     out = {}
     for key in ("nq","es","zn","dxy","btcf"):
         row = find_cftc_row(tff_rows, CFTC_CODES[key], CFTC_MATCH[key])
@@ -465,7 +616,9 @@ def futures_positioning(markets, tff_rows, legacy_rows):
         m = markets[key]
         cot_week_return = cot_aligned_return(m, cot.get("reportDate") if cot else None)
         classifier_return = cot_week_return if cot_week_return is not None else m.get("r5",0)
-        pos = classify_positioning(classifier_return, cot.get("deltaOI") if cot else None, cot.get("openInterest") if cot else None)
+        weekly_pos = classify_positioning(classifier_return, cot.get("deltaOI") if cot else None, cot.get("openInterest") if cot else None)
+        daily = (cme_daily.get("contracts") or {}).get(key) or {}
+        daily_pos = classify_positioning(m.get("r1",0), daily.get("deltaOI"), daily.get("openInterest")) if daily else {"label":"unavailable","bias":"neutral","explanation":"CME daily OI unavailable"}
         out[key] = {
             "symbol": m.get("symbol"),
             "price": m.get("price"),
@@ -476,10 +629,15 @@ def futures_positioning(markets, tff_rows, legacy_rows):
             "avgVolume5D": m.get("avg_volume_5d"),
             "volumeRatio": (round(m.get("volume_ratio",1),2) if m.get("volume") is not None else None),
             "deltaOIPct": (round(cot.get("deltaOI") / cot.get("openInterest") * 100, 3) if cot and cot.get("deltaOI") is not None and cot.get("openInterest") not in (None,0) else None),
+            "dailyOI": daily.get("openInterest"),
+            "dailyDeltaOI": daily.get("deltaOI"),
+            "dailyVolume": daily.get("volume"),
+            "dailyOIPct": (round(daily.get("deltaOI") / daily.get("openInterest") * 100, 3) if daily.get("deltaOI") is not None and daily.get("openInterest") not in (None,0) else None),
+            "dailyPositioning": daily_pos,
             "cot": cot,
-            "positioning": pos,
-            "horizon":"COT-week price vs weekly CFTC ΔOI",
-            "source":"Yahoo market proxy + CFTC TFF Futures Only"
+            "positioning": weekly_pos,
+            "horizon":"Daily CME OI + weekly CFTC ownership",
+            "source":"Yahoo price proxy + CME Daily VOI + CFTC TFF Futures Only"
         }
 
     row = find_cftc_row(legacy_rows, CFTC_CODES["gc"], CFTC_MATCH["gc"])
@@ -487,7 +645,9 @@ def futures_positioning(markets, tff_rows, legacy_rows):
     m = markets["gc"]
     cot_week_return = cot_aligned_return(m, cot.get("reportDate") if cot else None)
     classifier_return = cot_week_return if cot_week_return is not None else m.get("r5",0)
-    pos = classify_positioning(classifier_return, cot.get("deltaOI") if cot else None, cot.get("openInterest") if cot else None)
+    weekly_pos = classify_positioning(classifier_return, cot.get("deltaOI") if cot else None, cot.get("openInterest") if cot else None)
+    daily = (cme_daily.get("contracts") or {}).get("gc") or {}
+    daily_pos = classify_positioning(m.get("r1",0), daily.get("deltaOI"), daily.get("openInterest")) if daily else {"label":"unavailable","bias":"neutral","explanation":"CME daily OI unavailable"}
     out["gc"] = {
         "symbol":m.get("symbol"),
         "price":m.get("price"),
@@ -498,10 +658,15 @@ def futures_positioning(markets, tff_rows, legacy_rows):
         "avgVolume5D":m.get("avg_volume_5d"),
         "volumeRatio":(round(m.get("volume_ratio",1),2) if m.get("volume") is not None else None),
         "deltaOIPct":(round(cot.get("deltaOI") / cot.get("openInterest") * 100, 3) if cot and cot.get("deltaOI") is not None and cot.get("openInterest") not in (None,0) else None),
+        "dailyOI":daily.get("openInterest"),
+        "dailyDeltaOI":daily.get("deltaOI"),
+        "dailyVolume":daily.get("volume"),
+        "dailyOIPct":(round(daily.get("deltaOI") / daily.get("openInterest") * 100, 3) if daily.get("deltaOI") is not None and daily.get("openInterest") not in (None,0) else None),
+        "dailyPositioning":daily_pos,
         "cot":cot,
-        "positioning":pos,
-        "horizon":"COT-week price vs weekly CFTC ΔOI",
-        "source":"Yahoo market proxy + CFTC Legacy Futures Only"
+        "positioning":weekly_pos,
+        "horizon":"Daily CME OI + weekly CFTC ownership",
+        "source":"Yahoo price proxy + CME Daily VOI + CFTC Legacy Futures Only"
     }
     return out
 
@@ -665,9 +830,10 @@ def main():
 
     fred = {key: safe_fred(series) for key, series in FRED_SERIES.items()}
     stable = safe_stablecoins()
+    cme_daily = safe_cme_daily_voi()
     tff_rows = safe_socrata(CFTC_DATASETS["tff_futures"], 800)
     legacy_rows = safe_socrata(CFTC_DATASETS["legacy_futures"], 800)
-    futpos = futures_positioning(markets, tff_rows, legacy_rows)
+    futpos = futures_positioning(markets, tff_rows, legacy_rows, cme_daily)
     news_by_station = {}
     for sid, query in NEWS_QUERIES.items():
         news_by_station[sid] = safe_news(query, 8)
@@ -716,6 +882,9 @@ def main():
                 "signal": p.get("bias","neutral"),
                 "note": p.get("explanation",""),
                 "positioning": p.get("label","unavailable"),
+                "dailyPositioning": (d.get("dailyPositioning") or {}).get("label","unavailable"),
+                "dailyPositioningSignal": (d.get("dailyPositioning") or {}).get("bias","neutral"),
+                "dailyPositioningNote": (d.get("dailyPositioning") or {}).get("explanation",""),
                 "price": d.get("price"),
                 "priceChange1D": d.get("priceChange1D"),
                 "priceChange5D": d.get("priceChange5D"),
@@ -726,6 +895,10 @@ def main():
                 "openInterest": cot.get("openInterest"),
                 "deltaOIPct": d.get("deltaOIPct"),
                 "deltaOI": cot.get("deltaOI"),
+                "dailyOpenInterest": d.get("dailyOI"),
+                "dailyDeltaOI": d.get("dailyDeltaOI"),
+                "dailyDeltaOIPct": d.get("dailyOIPct"),
+                "dailyVolume": d.get("dailyVolume"),
                 "reportDate": cot.get("reportDate"),
                 "assetManager": cot.get("assetManager"),
                 "leveragedFunds": cot.get("leveragedFunds"),
@@ -771,13 +944,14 @@ def main():
             "riskConfirmation":round(ctx["risk_confirmation"],1),
             "stablecoinLiquidity":round(ctx["crypto_liquidity"],1),
             "fred":fred,
-            "stablecoins":stable
+            "stablecoins":stable,
+            "cmeDaily":cme_daily
         },
         "methodology":{
             "flow":"Market-flow proxy from price momentum, relative strength and volume participation.",
             "institutional":"Public macro/liquidity confirmation layer from FRED plus stablecoin supply; not prime-broker or custodian flow.",
             "routes":"Inferred probabilities using market attraction + confirmation scores; not observed transaction paths.",
-            "futures":"Daily futures price/volume proxies plus weekly CFTC futures-only open interest and trader positioning. Positioning labels align price to the CFTC report week where history is available; they are interpretive, not transaction-level proof.",
+            "futures":"Daily CME volume/open-interest is used for daily leverage classification where available; weekly CFTC futures-only data is used for ownership/positioning. Labels are interpretive, not transaction-level proof.",
             "news":"Per-station headlines aggregated from Google News RSS and ranked by recency plus recognized financial-news sources.",
             "cadence":"GitHub Actions target cadence: approximately hourly; scheduled runs are best-effort and may be delayed on the free service."
         }
@@ -810,7 +984,8 @@ def main():
         "fredAvailable":sum(1 for v in fred.values() if not v.get("error")),
         "stablecoinsAvailable":not stable.get("error"),
         "newsItems":sum(len(v) for v in news_by_station.values()),
-        "cftcTffRows":len(tff_rows),"cftcLegacyRows":len(legacy_rows)
+        "cftcTffRows":len(tff_rows),"cftcLegacyRows":len(legacy_rows),
+        "cmeDailyContracts":len((cme_daily.get("contracts") or {})),"cmeDailyError":cme_daily.get("error")
     },ensure_ascii=False))
 
 if __name__ == "__main__":
