@@ -106,8 +106,15 @@ def fetch_yahoo(symbol):
         avg = sum(volumes[-6:-1]) / max(1, len(volumes[-6:-1]))
         if avg > 0:
             vr = volumes[-1] / avg
+    avg_vol = None
+    if len(volumes) >= 6:
+        sample = [v for v in volumes[-6:-1] if v is not None]
+        if sample:
+            avg_vol = sum(sample) / len(sample)
     return {
         "symbol": symbol, "price": p, "r1": r1, "r5": r5,
+        "volume": volumes[-1] if volumes else None,
+        "avg_volume_5d": avg_vol,
         "volume_ratio": vr, "market_time": meta.get("regularMarketTime"),
         "currency": meta.get("currency"), "source": "Yahoo Finance chart endpoint",
     }
@@ -279,6 +286,171 @@ def future_signal(m):
     if s < -9: return "negative"
     return "neutral"
 
+CFTC_DATASETS = {
+    "tff_combined": "yw9f-hn96",
+    "legacy_combined": "jun7-fc8e",
+}
+
+CFTC_MATCH = {
+    "nq": ["NASDAQ-100", "NASDAQ 100", "NASDAQ MINI"],
+    "es": ["S&P 500", "E-MINI S&P", "S&P 500 CONSOLIDATED"],
+    "zn": ["10-YEAR U.S. TREASURY", "10 YEAR U.S. TREASURY", "10-YEAR TREASURY"],
+    "dxy": ["U.S. DOLLAR INDEX", "US DOLLAR INDEX"],
+    "btcf": ["BITCOIN", "CME BITCOIN"],
+    "gc": ["GOLD", "COMEX GOLD"],
+}
+
+def _num(row, *names):
+    for name in names:
+        raw = row.get(name)
+        if raw not in (None, "", "."):
+            try:
+                return float(raw)
+            except (TypeError, ValueError):
+                pass
+    return None
+
+def _txt(row, *names):
+    for name in names:
+        raw = row.get(name)
+        if raw not in (None, ""):
+            return str(raw)
+    return ""
+
+def fetch_socrata(dataset_id, limit=5000):
+    params = urllib.parse.urlencode({
+        "$limit": str(limit),
+        "$order": "report_date_as_yyyy_mm_dd DESC",
+    })
+    return http_json(f"https://publicreporting.cftc.gov/resource/{dataset_id}.json?{params}", 20)
+
+def safe_socrata(dataset_id, limit=5000):
+    try:
+        data = fetch_socrata(dataset_id, limit)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+def find_cftc_row(rows, aliases):
+    best = None
+    for row in rows:
+        name = (_txt(row, "market_and_exchange_names", "contract_market_name", "commodity_name") or "").upper()
+        if any(alias.upper() in name for alias in aliases):
+            if best is None:
+                best = row
+            # Prefer CME/CBOT/COMEX records when duplicates exist.
+            if any(ex in name for ex in ("CHICAGO MERCANTILE", "CHICAGO BOARD", "COMMODITY EXCHANGE", "CME", "CBOT", "COMEX")):
+                return row
+    return best
+
+def extract_tff(row):
+    if not row:
+        return None
+    oi = _num(row, "open_interest_all")
+    doi = _num(row, "change_in_open_interest_all", "change_in_open_interest")
+    am_long = _num(row, "asset_mgr_positions_long", "asset_mgr_positions_long_all")
+    am_short = _num(row, "asset_mgr_positions_short", "asset_mgr_positions_short_all")
+    am_chg_long = _num(row, "change_in_asset_mgr_long", "change_in_asset_mgr_long_all")
+    am_chg_short = _num(row, "change_in_asset_mgr_short", "change_in_asset_mgr_short_all")
+    lev_long = _num(row, "lev_money_positions_long", "leveraged_funds_positions_long", "lev_money_positions_long_all")
+    lev_short = _num(row, "lev_money_positions_short", "leveraged_funds_positions_short", "lev_money_positions_short_all")
+    lev_chg_long = _num(row, "change_in_lev_money_long", "change_in_lev_money_long_all")
+    lev_chg_short = _num(row, "change_in_lev_money_short", "change_in_lev_money_short_all")
+    return {
+        "reportDate": _txt(row, "report_date_as_yyyy_mm_dd"),
+        "market": _txt(row, "market_and_exchange_names", "contract_market_name"),
+        "openInterest": oi,
+        "deltaOI": doi,
+        "assetManager": {
+            "long": am_long, "short": am_short,
+            "net": (am_long-am_short) if am_long is not None and am_short is not None else None,
+            "deltaLong": am_chg_long, "deltaShort": am_chg_short,
+            "deltaNet": (am_chg_long-am_chg_short) if am_chg_long is not None and am_chg_short is not None else None,
+        },
+        "leveragedFunds": {
+            "long": lev_long, "short": lev_short,
+            "net": (lev_long-lev_short) if lev_long is not None and lev_short is not None else None,
+            "deltaLong": lev_chg_long, "deltaShort": lev_chg_short,
+            "deltaNet": (lev_chg_long-lev_chg_short) if lev_chg_long is not None and lev_chg_short is not None else None,
+        }
+    }
+
+def extract_legacy(row):
+    if not row:
+        return None
+    oi = _num(row, "open_interest_all")
+    doi = _num(row, "change_in_open_interest_all", "change_in_open_interest")
+    nl = _num(row, "noncomm_positions_long_all")
+    ns = _num(row, "noncomm_positions_short_all")
+    chl = _num(row, "change_in_noncomm_long_all", "change_in_noncomm_long")
+    chs = _num(row, "change_in_noncomm_short_all", "change_in_noncomm_short")
+    return {
+        "reportDate": _txt(row, "report_date_as_yyyy_mm_dd"),
+        "market": _txt(row, "market_and_exchange_names", "contract_market_name"),
+        "openInterest": oi,
+        "deltaOI": doi,
+        "nonCommercial": {
+            "long": nl, "short": ns,
+            "net": (nl-ns) if nl is not None and ns is not None else None,
+            "deltaLong": chl, "deltaShort": chs,
+            "deltaNet": (chl-chs) if chl is not None and chs is not None else None,
+        }
+    }
+
+def classify_positioning(price_change_pct, delta_oi):
+    if delta_oi is None:
+        return {"label":"unavailable","bias":"neutral","explanation":"Open-interest change unavailable"}
+    # Require a meaningful move; otherwise call it mixed/flat.
+    if abs(price_change_pct or 0) < 0.10 or abs(delta_oi) < 1:
+        return {"label":"mixed / flat","bias":"neutral","explanation":"Price or open-interest change is too small for a directional classification"}
+    if price_change_pct > 0 and delta_oi > 0:
+        return {"label":"new longs","bias":"positive","explanation":"Price rose while open interest increased"}
+    if price_change_pct > 0 and delta_oi < 0:
+        return {"label":"short covering","bias":"positive","explanation":"Price rose while open interest decreased"}
+    if price_change_pct < 0 and delta_oi > 0:
+        return {"label":"new shorts","bias":"negative","explanation":"Price fell while open interest increased"}
+    return {"label":"long liquidation","bias":"negative","explanation":"Price fell while open interest decreased"}
+
+def futures_positioning(markets, tff_rows, legacy_rows):
+    out = {}
+    for key in ("nq","es","zn","dxy","btcf"):
+        row = find_cftc_row(tff_rows, CFTC_MATCH[key])
+        cot = extract_tff(row)
+        m = markets[key]
+        pos = classify_positioning(m.get("r5",0), cot.get("deltaOI") if cot else None)
+        out[key] = {
+            "symbol": m.get("symbol"),
+            "price": m.get("price"),
+            "priceChange1D": round(m.get("r1",0),3),
+            "priceChange5D": round(m.get("r5",0),3),
+            "volume": m.get("volume"),
+            "avgVolume5D": m.get("avg_volume_5d"),
+            "volumeRatio": round(m.get("volume_ratio",1),2),
+            "cot": cot,
+            "positioning": pos,
+            "horizon":"5D price vs weekly CFTC ΔOI",
+            "source":"Yahoo market proxy + CFTC TFF Combined"
+        }
+
+    row = find_cftc_row(legacy_rows, CFTC_MATCH["gc"])
+    cot = extract_legacy(row)
+    m = markets["gc"]
+    pos = classify_positioning(m.get("r5",0), cot.get("deltaOI") if cot else None)
+    out["gc"] = {
+        "symbol":m.get("symbol"),
+        "price":m.get("price"),
+        "priceChange1D":round(m.get("r1",0),3),
+        "priceChange5D":round(m.get("r5",0),3),
+        "volume":m.get("volume"),
+        "avgVolume5D":m.get("avg_volume_5d"),
+        "volumeRatio":round(m.get("volume_ratio",1),2),
+        "cot":cot,
+        "positioning":pos,
+        "horizon":"5D price vs weekly CFTC ΔOI",
+        "source":"Yahoo market proxy + CFTC Legacy Combined"
+    }
+    return out
+
 def fred_change_signal(m, positive_when_up=True, threshold=0.0):
     if m.get("error"):
         return "neutral"
@@ -439,6 +611,9 @@ def main():
 
     fred = {key: safe_fred(series) for key, series in FRED_SERIES.items()}
     stable = safe_stablecoins()
+    tff_rows = safe_socrata(CFTC_DATASETS["tff_combined"], 6000)
+    legacy_rows = safe_socrata(CFTC_DATASETS["legacy_combined"], 6000)
+    futpos = futures_positioning(markets, tff_rows, legacy_rows)
     news_by_station = {}
     for sid, query in NEWS_QUERIES.items():
         news_by_station[sid] = safe_news(query, 8)
@@ -478,21 +653,43 @@ def main():
         institutional = station_institutionals(sid, fred, stable, ctx)
 
         futures = []
+        def fut_item(label, key):
+            d = futpos.get(key, {})
+            cot = d.get("cot") or {}
+            p = d.get("positioning") or {"label":"unavailable","bias":"neutral","explanation":""}
+            return {
+                "name": label,
+                "signal": p.get("bias","neutral"),
+                "note": p.get("explanation",""),
+                "positioning": p.get("label","unavailable"),
+                "price": d.get("price"),
+                "priceChange1D": d.get("priceChange1D"),
+                "priceChange5D": d.get("priceChange5D"),
+                "volume": d.get("volume"),
+                "avgVolume5D": d.get("avgVolume5D"),
+                "volumeRatio": d.get("volumeRatio"),
+                "openInterest": cot.get("openInterest"),
+                "deltaOI": cot.get("deltaOI"),
+                "reportDate": cot.get("reportDate"),
+                "assetManager": cot.get("assetManager"),
+                "leveragedFunds": cot.get("leveragedFunds"),
+                "nonCommercial": cot.get("nonCommercial"),
+                "horizon": d.get("horizon"),
+                "source": d.get("source"),
+            }
+
         if sid == "usd":
-            futures = [{"name":"DXY","signal":future_signal(markets["dxy"]),"note":f"1D {markets['dxy'].get('r1',0):+.2f}% | free market proxy"}]
+            futures = [fut_item("U.S. Dollar Index futures", "dxy")]
         elif sid == "bonds":
-            futures = [{"name":"10Y Treasury futures (ZN)","signal":future_signal(markets["zn"]),"note":f"1D {markets['zn'].get('r1',0):+.2f}% | delayed/free feed"}]
+            futures = [fut_item("10Y Treasury futures (ZN)", "zn")]
         elif sid == "gold":
-            futures = [{"name":"COMEX Gold (GC)","signal":future_signal(markets["gc"]),"note":f"1D {markets['gc'].get('r1',0):+.2f}% | delayed/free feed"}]
+            futures = [fut_item("COMEX Gold (GC)", "gc")]
         elif sid == "stocks":
-            futures = [
-                {"name":"NQ futures","signal":future_signal(markets["nq"]),"note":f"1D {markets['nq'].get('r1',0):+.2f}% | Nasdaq confirmation"},
-                {"name":"ES futures","signal":future_signal(markets["es"]),"note":f"1D {markets['es'].get('r1',0):+.2f}% | S&P confirmation"},
-            ]
+            futures = [fut_item("Nasdaq-100 futures (NQ)", "nq"), fut_item("S&P 500 futures (ES)", "es")]
         elif sid == "crypto":
-            futures = [{"name":"CME BTC futures","signal":future_signal(markets["btcf"]),"note":("free delayed proxy" if not markets["btcf"].get("error") else "free futures feed unavailable; spot BTC remains primary")}]
+            futures = [fut_item("CME Bitcoin futures", "btcf")]
         else:
-            futures = [{"name":"Derivatives confirmation","signal":"neutral","note":"No robust free futures feed wired for this station yet"}]
+            futures = [{"name":"Derivatives confirmation","signal":"neutral","positioning":"unavailable","note":"No robust free futures positioning contract mapped for this station yet"}]
 
         stations.append({
             "id":sid,"name":name,"short":short,"state":state,"flow":flow,
@@ -524,7 +721,7 @@ def main():
             "flow":"Market-flow proxy from price momentum, relative strength and volume participation.",
             "institutional":"Public macro/liquidity confirmation layer from FRED plus stablecoin supply; not prime-broker or custodian flow.",
             "routes":"Inferred probabilities using market attraction + confirmation scores; not observed transaction paths.",
-            "futures":"Free/delayed market proxies where available.",
+            "futures":"Daily futures price/volume proxies plus weekly CFTC open interest and trader positioning. Positioning labels use 5D price direction against weekly ΔOI and must not be read as transaction-level proof.",
             "news":"Per-station headlines aggregated from Google News RSS and ranked by recency plus recognized financial-news sources.",
             "cadence":"GitHub Actions target cadence: approximately hourly; scheduled runs are best-effort and may be delayed on the free service."
         }
@@ -556,7 +753,8 @@ def main():
         "dominantRoute":dominant,"historyPoints":len(history),
         "fredAvailable":sum(1 for v in fred.values() if not v.get("error")),
         "stablecoinsAvailable":not stable.get("error"),
-        "newsItems":sum(len(v) for v in news_by_station.values())
+        "newsItems":sum(len(v) for v in news_by_station.values()),
+        "cftcTffRows":len(tff_rows),"cftcLegacyRows":len(legacy_rows)
     },ensure_ascii=False))
 
 if __name__ == "__main__":
