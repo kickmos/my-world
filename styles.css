@@ -186,3 +186,12 @@ h2{font-size:20px}
   .cot-row{grid-template-columns:1fr auto}
   .cot-row em{grid-column:1/-1}
 }
+
+.position-stack{display:grid;grid-template-columns:auto auto;gap:4px 6px;align-items:center;justify-items:end}
+.position-label{font-size:8px;color:var(--muted);font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+.position-label.weekly{opacity:.72}
+.future-explain b{color:#cbd8e8}
+@media(max-width:520px){
+  .future-card-head{align-items:stretch;flex-direction:column}
+  .position-stack{justify-items:start;justify-content:start}
+}
