@@ -142,18 +142,27 @@ function openStation(station){
     return `<article class="future-card">
       <div class="future-card-head">
         <div><strong>${item.name}</strong><span class="future-horizon">${item.horizon||""}</span></div>
-        <span class="positioning-pill ${item.signal||"neutral"}">${item.positioning||"unavailable"}</span>
+        <div class="position-stack">
+          <span class="position-label">Daily</span>
+          <span class="positioning-pill ${item.dailyPositioningSignal||"neutral"}">${item.dailyPositioning||"unavailable"}</span>
+          <span class="position-label weekly">Weekly</span>
+          <span class="positioning-pill ${item.signal||"neutral"}">${item.positioning||"unavailable"}</span>
+        </div>
       </div>
-      <p class="future-explain">${item.note||""}</p>
+      <p class="future-explain"><b>Daily:</b> ${item.dailyPositioningNote||"Daily OI unavailable"}<br><b>Weekly:</b> ${item.note||""}</p>
       <div class="future-metrics">
         <div><span>Price 1D</span><b>${pct(item.priceChange1D)}</b></div>
         <div><span>COT-week price</span><b>${pct(item.priceChangeCotWeek)}</b></div>
         <div><span>Price 5D</span><b>${pct(item.priceChange5D)}</b></div>
-        <div><span>Volume</span><b>${fmt(item.volume)}</b></div>
+        <div><span>Market volume</span><b>${fmt(item.volume)}</b></div>
         <div><span>Vol / 5D avg</span><b>${item.volumeRatio==null?"n/a":Number(item.volumeRatio).toFixed(2)+"×"}</b></div>
-        <div><span>Open interest</span><b>${fmt(item.openInterest)}</b></div>
-        <div><span>ΔOI weekly</span><b>${fmt(item.deltaOI)}</b></div>
-        <div><span>ΔOI %</span><b>${item.deltaOIPct==null?"n/a":pct(item.deltaOIPct)}</b></div>
+        <div><span>CME daily volume</span><b>${fmt(item.dailyVolume)}</b></div>
+        <div><span>Daily OI</span><b>${fmt(item.dailyOpenInterest)}</b></div>
+        <div><span>Daily ΔOI</span><b>${fmt(item.dailyDeltaOI)}</b></div>
+        <div><span>Daily ΔOI %</span><b>${item.dailyDeltaOIPct==null?"n/a":pct(item.dailyDeltaOIPct)}</b></div>
+        <div><span>CFTC weekly OI</span><b>${fmt(item.openInterest)}</b></div>
+        <div><span>CFTC ΔOI</span><b>${fmt(item.deltaOI)}</b></div>
+        <div><span>CFTC ΔOI %</span><b>${item.deltaOIPct==null?"n/a":pct(item.deltaOIPct)}</b></div>
       </div>
       <div class="cot-block">
         <div class="cot-title"><span>CFTC COT</span><em>${item.reportDate||"date unavailable"}</em></div>
