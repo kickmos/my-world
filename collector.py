@@ -679,7 +679,7 @@ def cot_aligned_return(market, report_date):
 
 def classify_positioning(price_change_pct, delta_oi, open_interest=None):
     if delta_oi is None:
-        return {"label":"unavailable","bias":"neutral","explanation":"Open-interest change unavailable"}
+        return {"label":"unavailable","bias":"neutral","explanation":"Open-interest change unavailable or prior-day baseline not collected yet"}
     doi_pct = (delta_oi / open_interest * 100) if open_interest not in (None, 0) else None
     oi_small = (doi_pct is not None and abs(doi_pct) < 0.05) or (doi_pct is None and abs(delta_oi) < 1)
     if abs(price_change_pct or 0) < 0.10 or oi_small:
@@ -763,7 +763,7 @@ def futures_positioning(markets, tff_rows, legacy_rows, cme_daily, yahoo_fut_quo
             "cot": cot,
             "positioning": weekly_pos,
             "horizon":"Daily CME OI + weekly CFTC ownership",
-            "source":"Yahoo price proxy + CME Daily VOI + CFTC TFF Futures Only"
+            "source":"Yahoo price + delayed OI + CFTC TFF Futures Only"
         }
 
     row = find_cftc_row(legacy_rows, CFTC_CODES["gc"], CFTC_MATCH["gc"])
@@ -796,7 +796,7 @@ def futures_positioning(markets, tff_rows, legacy_rows, cme_daily, yahoo_fut_quo
         "cot":cot,
         "positioning":weekly_pos,
         "horizon":"Daily CME OI + weekly CFTC ownership",
-        "source":"Yahoo price proxy + CME Daily VOI + CFTC Legacy Futures Only"
+        "source":"Yahoo price + delayed OI + CFTC Legacy Futures Only"
     }
     return out
 
