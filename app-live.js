@@ -125,7 +125,41 @@ function openStation(station){
   document.getElementById("evidenceList").innerHTML=(station.evidence||[]).map(([name,type,note])=>`<div class="evidence"><div class="evidence-top"><strong>${name}</strong><span class="badge ${type.toLowerCase()}">${type}</span></div><p>${note}</p></div>`).join("");
   document.getElementById("institutionalList").innerHTML=(station.institutional||[]).map(item=>`<div class="institutional-item"><div><strong>${item.name}</strong><br><span>${item.note||""}</span></div><div class="institutional-value"><b>${item.value||""}</b><span class="future-state ${item.signal||"neutral"}">${item.signal||"neutral"}</span></div></div>`).join("")||`<div class="institutional-item"><span>No institutional confirmation wired yet</span></div>`;
   document.getElementById("nextList").innerHTML=(station.next||[]).map(r=>`<div class="next-row"><strong>${r.label}</strong><span>${r.probability}% inferred route</span></div>`).join("")||`<div class="next-row"><span>No route estimate yet</span></div>`;
-  document.getElementById("futureList").innerHTML=(station.futures||[]).map(item=>`<div class="future-item"><div><strong>${item.name}</strong><br><span>${item.note}</span></div><span class="future-state ${item.signal}">${item.signal}</span></div>`).join("")||`<div class="future-item"><span>No futures proxy yet</span></div>`;
+  document.getElementById("futureList").innerHTML=(station.futures||[]).map(item=>{
+    const fmt=n=>n==null?"n/a":Number(n).toLocaleString(undefined,{maximumFractionDigits:2});
+    const pct=n=>n==null?"n/a":(Number(n)>=0?"+":"")+Number(n).toFixed(2)+"%";
+    const cot=item.assetManager||item.leveragedFunds||item.nonCommercial;
+    const cotRows=[];
+    if(item.assetManager){
+      cotRows.push(`<div class="cot-row"><span>Asset Manager</span><b>${fmt(item.assetManager.net)}</b><em>Δnet ${fmt(item.assetManager.deltaNet)}</em></div>`);
+    }
+    if(item.leveragedFunds){
+      cotRows.push(`<div class="cot-row"><span>Leveraged Funds</span><b>${fmt(item.leveragedFunds.net)}</b><em>Δnet ${fmt(item.leveragedFunds.deltaNet)}</em></div>`);
+    }
+    if(item.nonCommercial){
+      cotRows.push(`<div class="cot-row"><span>Non-commercial</span><b>${fmt(item.nonCommercial.net)}</b><em>Δnet ${fmt(item.nonCommercial.deltaNet)}</em></div>`);
+    }
+    return `<article class="future-card">
+      <div class="future-card-head">
+        <div><strong>${item.name}</strong><span class="future-horizon">${item.horizon||""}</span></div>
+        <span class="positioning-pill ${item.signal||"neutral"}">${item.positioning||"unavailable"}</span>
+      </div>
+      <p class="future-explain">${item.note||""}</p>
+      <div class="future-metrics">
+        <div><span>Price 1D</span><b>${pct(item.priceChange1D)}</b></div>
+        <div><span>Price 5D</span><b>${pct(item.priceChange5D)}</b></div>
+        <div><span>Volume</span><b>${fmt(item.volume)}</b></div>
+        <div><span>Vol / 5D avg</span><b>${item.volumeRatio==null?"n/a":Number(item.volumeRatio).toFixed(2)+"×"}</b></div>
+        <div><span>Open interest</span><b>${fmt(item.openInterest)}</b></div>
+        <div><span>ΔOI weekly</span><b>${fmt(item.deltaOI)}</b></div>
+      </div>
+      <div class="cot-block">
+        <div class="cot-title"><span>CFTC COT</span><em>${item.reportDate||"date unavailable"}</em></div>
+        ${cotRows.join("")||'<div class="cot-empty">COT breakdown unavailable for this contract</div>'}
+      </div>
+      <div class="future-source">${item.source||""}</div>
+    </article>`;
+  }).join("")||`<div class="future-item"><span>No futures proxy yet</span></div>`;
   panel.classList.add("open");backdrop.classList.add("show");panel.setAttribute("aria-hidden","false");
   const newsBtn=document.getElementById("openNewsFromDetail");if(newsBtn)newsBtn.onclick=()=>openNews(station);
 }
