@@ -91,8 +91,11 @@ def fetch_yahoo(symbol):
     data = http_json(url, 12)
     result = data["chart"]["result"][0]
     quote = result["indicators"]["quote"][0]
-    closes = [x for x in quote.get("close", []) if x is not None]
-    volumes = [x for x in quote.get("volume", []) if x is not None]
+    raw_closes = quote.get("close", [])
+    raw_volumes = quote.get("volume", [])
+    timestamps = result.get("timestamp", [])
+    closes = [x for x in raw_closes if x is not None]
+    volumes = [x for x in raw_volumes if x is not None]
     meta = result.get("meta", {})
     if len(closes) < 2:
         raise ValueError("not enough history")
@@ -111,12 +114,18 @@ def fetch_yahoo(symbol):
         sample = [v for v in volumes[-6:-1] if v is not None]
         if sample:
             avg_vol = sum(sample) / len(sample)
+    history = []
+    for ts, cl in zip(timestamps, raw_closes):
+        if cl is None:
+            continue
+        history.append({"ts": int(ts), "close": float(cl)})
     return {
         "symbol": symbol, "price": p, "r1": r1, "r5": r5,
-        "volume": volumes[-1] if volumes else None,
+        "volume": (volumes[-1] if volumes and volumes[-1] not in (0, None) else None),
         "avg_volume_5d": avg_vol,
         "volume_ratio": vr, "market_time": meta.get("regularMarketTime"),
         "currency": meta.get("currency"), "source": "Yahoo Finance chart endpoint",
+        "history": history,
     }
 
 def safe_fetch(symbol):
@@ -410,6 +419,29 @@ def extract_legacy(row):
         }
     }
 
+def cot_aligned_return(market, report_date):
+    if not report_date or not market.get("history"):
+        return None
+    try:
+        dt = datetime.fromisoformat(str(report_date).replace("Z","+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+    target = dt.timestamp()
+    prior = target - 7 * 86400
+
+    hist = sorted(market["history"], key=lambda x: x["ts"])
+    def nearest_on_or_before(ts):
+        candidates = [x for x in hist if x["ts"] <= ts + 18*3600]
+        return candidates[-1] if candidates else None
+
+    cur = nearest_on_or_before(target)
+    prv = nearest_on_or_before(prior)
+    if not cur or not prv or not prv.get("close"):
+        return None
+    return (cur["close"] / prv["close"] - 1) * 100
+
 def classify_positioning(price_change_pct, delta_oi):
     if delta_oi is None:
         return {"label":"unavailable","bias":"neutral","explanation":"Open-interest change unavailable"}
@@ -430,36 +462,42 @@ def futures_positioning(markets, tff_rows, legacy_rows):
         row = find_cftc_row(tff_rows, CFTC_CODES[key], CFTC_MATCH[key])
         cot = extract_tff(row)
         m = markets[key]
-        pos = classify_positioning(m.get("r5",0), cot.get("deltaOI") if cot else None)
+        cot_week_return = cot_aligned_return(m, cot.get("reportDate") if cot else None)
+        classifier_return = cot_week_return if cot_week_return is not None else m.get("r5",0)
+        pos = classify_positioning(classifier_return, cot.get("deltaOI") if cot else None)
         out[key] = {
             "symbol": m.get("symbol"),
             "price": m.get("price"),
             "priceChange1D": round(m.get("r1",0),3),
             "priceChange5D": round(m.get("r5",0),3),
+            "priceChangeCotWeek": round(cot_week_return,3) if cot_week_return is not None else None,
             "volume": m.get("volume"),
             "avgVolume5D": m.get("avg_volume_5d"),
             "volumeRatio": round(m.get("volume_ratio",1),2),
             "cot": cot,
             "positioning": pos,
-            "horizon":"5D price vs weekly CFTC ΔOI",
+            "horizon":"COT-week price vs weekly CFTC ΔOI",
             "source":"Yahoo market proxy + CFTC TFF Futures Only"
         }
 
     row = find_cftc_row(legacy_rows, CFTC_CODES["gc"], CFTC_MATCH["gc"])
     cot = extract_legacy(row)
     m = markets["gc"]
-    pos = classify_positioning(m.get("r5",0), cot.get("deltaOI") if cot else None)
+    cot_week_return = cot_aligned_return(m, cot.get("reportDate") if cot else None)
+    classifier_return = cot_week_return if cot_week_return is not None else m.get("r5",0)
+    pos = classify_positioning(classifier_return, cot.get("deltaOI") if cot else None)
     out["gc"] = {
         "symbol":m.get("symbol"),
         "price":m.get("price"),
         "priceChange1D":round(m.get("r1",0),3),
         "priceChange5D":round(m.get("r5",0),3),
+        "priceChangeCotWeek":round(cot_week_return,3) if cot_week_return is not None else None,
         "volume":m.get("volume"),
         "avgVolume5D":m.get("avg_volume_5d"),
         "volumeRatio":round(m.get("volume_ratio",1),2),
         "cot":cot,
         "positioning":pos,
-        "horizon":"5D price vs weekly CFTC ΔOI",
+        "horizon":"COT-week price vs weekly CFTC ΔOI",
         "source":"Yahoo market proxy + CFTC Legacy Futures Only"
     }
     return out
@@ -678,6 +716,7 @@ def main():
                 "price": d.get("price"),
                 "priceChange1D": d.get("priceChange1D"),
                 "priceChange5D": d.get("priceChange5D"),
+                "priceChangeCotWeek": d.get("priceChangeCotWeek"),
                 "volume": d.get("volume"),
                 "avgVolume5D": d.get("avgVolume5D"),
                 "volumeRatio": d.get("volumeRatio"),
@@ -734,7 +773,7 @@ def main():
             "flow":"Market-flow proxy from price momentum, relative strength and volume participation.",
             "institutional":"Public macro/liquidity confirmation layer from FRED plus stablecoin supply; not prime-broker or custodian flow.",
             "routes":"Inferred probabilities using market attraction + confirmation scores; not observed transaction paths.",
-            "futures":"Daily futures price/volume proxies plus weekly CFTC open interest and trader positioning. Positioning labels use 5D price direction against weekly ΔOI and must not be read as transaction-level proof.",
+            "futures":"Daily futures price/volume proxies plus weekly CFTC futures-only open interest and trader positioning. Positioning labels align price to the CFTC report week where history is available; they are interpretive, not transaction-level proof.",
             "news":"Per-station headlines aggregated from Google News RSS and ranked by recency plus recognized financial-news sources.",
             "cadence":"GitHub Actions target cadence: approximately hourly; scheduled runs are best-effort and may be delayed on the free service."
         }
