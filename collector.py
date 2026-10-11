@@ -442,11 +442,12 @@ def cot_aligned_return(market, report_date):
         return None
     return (cur["close"] / prv["close"] - 1) * 100
 
-def classify_positioning(price_change_pct, delta_oi):
+def classify_positioning(price_change_pct, delta_oi, open_interest=None):
     if delta_oi is None:
         return {"label":"unavailable","bias":"neutral","explanation":"Open-interest change unavailable"}
-    # Require a meaningful move; otherwise call it mixed/flat.
-    if abs(price_change_pct or 0) < 0.10 or abs(delta_oi) < 1:
+    doi_pct = (delta_oi / open_interest * 100) if open_interest not in (None, 0) else None
+    oi_small = (doi_pct is not None and abs(doi_pct) < 0.05) or (doi_pct is None and abs(delta_oi) < 1)
+    if abs(price_change_pct or 0) < 0.10 or oi_small:
         return {"label":"mixed / flat","bias":"neutral","explanation":"Price or open-interest change is too small for a directional classification"}
     if price_change_pct > 0 and delta_oi > 0:
         return {"label":"new longs","bias":"positive","explanation":"Price rose while open interest increased"}
@@ -464,7 +465,7 @@ def futures_positioning(markets, tff_rows, legacy_rows):
         m = markets[key]
         cot_week_return = cot_aligned_return(m, cot.get("reportDate") if cot else None)
         classifier_return = cot_week_return if cot_week_return is not None else m.get("r5",0)
-        pos = classify_positioning(classifier_return, cot.get("deltaOI") if cot else None)
+        pos = classify_positioning(classifier_return, cot.get("deltaOI") if cot else None, cot.get("openInterest") if cot else None)
         out[key] = {
             "symbol": m.get("symbol"),
             "price": m.get("price"),
@@ -473,7 +474,8 @@ def futures_positioning(markets, tff_rows, legacy_rows):
             "priceChangeCotWeek": round(cot_week_return,3) if cot_week_return is not None else None,
             "volume": m.get("volume"),
             "avgVolume5D": m.get("avg_volume_5d"),
-            "volumeRatio": round(m.get("volume_ratio",1),2),
+            "volumeRatio": (round(m.get("volume_ratio",1),2) if m.get("volume") is not None else None),
+            "deltaOIPct": (round(cot.get("deltaOI") / cot.get("openInterest") * 100, 3) if cot and cot.get("deltaOI") is not None and cot.get("openInterest") not in (None,0) else None),
             "cot": cot,
             "positioning": pos,
             "horizon":"COT-week price vs weekly CFTC ΔOI",
@@ -485,7 +487,7 @@ def futures_positioning(markets, tff_rows, legacy_rows):
     m = markets["gc"]
     cot_week_return = cot_aligned_return(m, cot.get("reportDate") if cot else None)
     classifier_return = cot_week_return if cot_week_return is not None else m.get("r5",0)
-    pos = classify_positioning(classifier_return, cot.get("deltaOI") if cot else None)
+    pos = classify_positioning(classifier_return, cot.get("deltaOI") if cot else None, cot.get("openInterest") if cot else None)
     out["gc"] = {
         "symbol":m.get("symbol"),
         "price":m.get("price"),
@@ -494,7 +496,8 @@ def futures_positioning(markets, tff_rows, legacy_rows):
         "priceChangeCotWeek":round(cot_week_return,3) if cot_week_return is not None else None,
         "volume":m.get("volume"),
         "avgVolume5D":m.get("avg_volume_5d"),
-        "volumeRatio":round(m.get("volume_ratio",1),2),
+        "volumeRatio":(round(m.get("volume_ratio",1),2) if m.get("volume") is not None else None),
+        "deltaOIPct":(round(cot.get("deltaOI") / cot.get("openInterest") * 100, 3) if cot and cot.get("deltaOI") is not None and cot.get("openInterest") not in (None,0) else None),
         "cot":cot,
         "positioning":pos,
         "horizon":"COT-week price vs weekly CFTC ΔOI",
@@ -721,6 +724,7 @@ def main():
                 "avgVolume5D": d.get("avgVolume5D"),
                 "volumeRatio": d.get("volumeRatio"),
                 "openInterest": cot.get("openInterest"),
+                "deltaOIPct": d.get("deltaOIPct"),
                 "deltaOI": cot.get("deltaOI"),
                 "reportDate": cot.get("reportDate"),
                 "assetManager": cot.get("assetManager"),
