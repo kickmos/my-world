@@ -6,6 +6,8 @@ import math
 import time
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
+from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
 
 UA = {"User-Agent": "Mozilla/5.0 capital-flow-monitor/2.0"}
@@ -26,6 +28,23 @@ SYMBOLS = {
     "gc": "GC=F",
     "btcf": "BTC=F",
 }
+
+NEWS_QUERIES = {
+    "local": "(Thailand economy OR Thai baht OR SET Thailand OR Bank of Thailand) when:3d",
+    "usd": "(US dollar OR DXY OR Federal Reserve OR dollar liquidity) when:3d",
+    "mmf": "(money market funds OR Treasury bills OR T-bills OR cash funds) when:4d",
+    "bonds": "(US Treasury yields OR bond market OR credit spreads OR Treasury auction) when:3d",
+    "gold": "(gold price OR gold market OR central bank gold OR COMEX gold) when:3d",
+    "crypto": "(Bitcoin OR BTC OR stablecoin OR crypto market) when:3d",
+    "stocks": "(S&P 500 OR Nasdaq OR US stocks OR semiconductor stocks) when:3d",
+    "global": "(global markets OR Europe stocks OR Japan stocks OR China stocks OR emerging markets) when:3d",
+}
+
+TRUSTED_NEWS_SOURCES = (
+    "Reuters","Bloomberg","CNBC","Associated Press","AP News","Financial Times",
+    "The Wall Street Journal","MarketWatch","Yahoo Finance","Barron's",
+    "CoinDesk","The Block","Nikkei Asia","Business Insider"
+)
 
 FRED_SERIES = {
     "walcl": "WALCL",           # Fed total assets; weekly
@@ -159,6 +178,77 @@ def safe_stablecoins():
         return fetch_stablecoins()
     except Exception as e:
         return {"error": str(e), "source": "unavailable"}
+
+def fetch_google_news(query, limit=8):
+    params = urllib.parse.urlencode({"q": query, "hl": "en-US", "gl": "US", "ceid": "US:en"})
+    url = f"https://news.google.com/rss/search?{params}"
+    req = urllib.request.Request(url, headers=UA)
+    with urllib.request.urlopen(req, timeout=15) as r:
+        raw = r.read()
+    root = ET.fromstring(raw)
+    items, seen = [], set()
+    now = datetime.now(timezone.utc)
+
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        pub_raw = (item.findtext("pubDate") or "").strip()
+        source_node = item.find("source")
+        source = ((source_node.text or "").strip() if source_node is not None else "")
+        if not title or not link:
+            continue
+
+        clean_title = title
+        if source and title.endswith(" - " + source):
+            clean_title = title[:-(len(source)+3)].strip()
+
+        key = clean_title.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+
+        published = None
+        age_hours = None
+        if pub_raw:
+            try:
+                published = parsedate_to_datetime(pub_raw)
+                if published.tzinfo is None:
+                    published = published.replace(tzinfo=timezone.utc)
+                published = published.astimezone(timezone.utc)
+                age_hours = max(0.0, (now - published).total_seconds() / 3600.0)
+            except Exception:
+                pass
+
+        trusted = any(name.lower() in source.lower() for name in TRUSTED_NEWS_SOURCES)
+        recency = max(0.0, 72.0 - (age_hours if age_hours is not None else 72.0))
+        items.append({
+            "title": clean_title,
+            "source": source or "Google News",
+            "url": link,
+            "publishedAt": published.isoformat() if published else None,
+            "ageHours": round(age_hours, 1) if age_hours is not None else None,
+            "trusted": trusted,
+            "_score": (30 if trusted else 0) + recency,
+        })
+
+    items.sort(key=lambda x: x["_score"], reverse=True)
+    for x in items:
+        x.pop("_score", None)
+    return items[:limit]
+
+def safe_news(query, limit=8):
+    try:
+        return fetch_google_news(query, limit)
+    except Exception as e:
+        return [{
+            "title": "News feed temporarily unavailable",
+            "source": "System",
+            "url": "",
+            "publishedAt": None,
+            "ageHours": None,
+            "trusted": False,
+            "error": str(e),
+        }]
 
 def score_market(m):
     if m.get("error"):
@@ -349,6 +439,10 @@ def main():
 
     fred = {key: safe_fred(series) for key, series in FRED_SERIES.items()}
     stable = safe_stablecoins()
+    news_by_station = {}
+    for sid, query in NEWS_QUERIES.items():
+        news_by_station[sid] = safe_news(query, 8)
+        time.sleep(0.12)
     ctx = institutional_context(fred, stable)
 
     ids = [x[0] for x in BASE_STATIONS]
@@ -404,6 +498,7 @@ def main():
             "id":sid,"name":name,"short":short,"state":state,"flow":flow,
             "velocity":velocity_from(m),"confidence":confidence_from(m,institutional),"crowding":crowding_from(m),
             "desc":desc,"evidence":evidence,"institutional":institutional,"next":nxt,"futures":futures,
+            "news":news_by_station.get(sid, []),
             "market":{"symbol":m.get("symbol"),"price":m.get("price"),"r1":round(m.get("r1",0),3),"r5":round(m.get("r5",0),3),"score":round(s,1)},
             "confirmationScore":round(confirms.get(sid,0),1)
         })
@@ -416,7 +511,7 @@ def main():
     snapshot = {
         "updated":now.strftime("%Y-%m-%d %H:%M UTC"),
         "generatedAt":now.isoformat(),
-        "mode":"live-free-proxy-v2",
+        "mode":"live-free-proxy-v3",
         "regime":regime,"riskScore":risk_score,"liquidityScore":liquidity_score,
         "dominantRoute":dominant,"stations":stations,"routes":top_routes,
         "macro":{
@@ -430,7 +525,8 @@ def main():
             "institutional":"Public macro/liquidity confirmation layer from FRED plus stablecoin supply; not prime-broker or custodian flow.",
             "routes":"Inferred probabilities using market attraction + confirmation scores; not observed transaction paths.",
             "futures":"Free/delayed market proxies where available.",
-            "cadence":"GitHub Actions target cadence: minute 07 and 37 each hour; GitHub may delay scheduled runs."
+            "news":"Per-station headlines aggregated from Google News RSS and ranked by recency plus recognized financial-news sources.",
+            "cadence":"GitHub Actions target cadence: approximately hourly; scheduled runs are best-effort and may be delayed on the free service."
         }
     }
 
@@ -459,7 +555,8 @@ def main():
         "updated":snapshot["updated"],"regime":regime,"riskScore":risk_score,
         "dominantRoute":dominant,"historyPoints":len(history),
         "fredAvailable":sum(1 for v in fred.values() if not v.get("error")),
-        "stablecoinsAvailable":not stable.get("error")
+        "stablecoinsAvailable":not stable.get("error"),
+        "newsItems":sum(len(v) for v in news_by_station.values())
     },ensure_ascii=False))
 
 if __name__ == "__main__":
