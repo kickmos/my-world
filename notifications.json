@@ -1,5 +1,5 @@
 {
-  "snapshot": "2026-10-14 09:25",
+  "snapshot": "2026-10-14 09:25 ICT",
   "timezone": "Asia/Bangkok",
   "source": "ChatGPT Automations status checked 2026-10-14",
   "items": [
@@ -9,7 +9,41 @@
       "enabled": true,
       "frequency": "Hourly condition check",
       "delivery": "Push/email off",
-      "description": "Material updates on CPI, core CPI, PPI, PCE, inflation expectations, consensus revisions and potential XAUUSD / USD / yield response."
+      "description": "Material updates on CPI, core CPI, PPI, PCE, inflation expectations, consensus revisions and potential XAUUSD / USD / yield response.",
+      "scenario": "base",
+      "tags": [
+        "CPI / Core CPI",
+        "PPI / PCE",
+        "Fed expectations"
+      ],
+      "summary": "ติดตามตัวเลขเงินเฟ้อสหรัฐและการเปลี่ยนแปลงคาดการณ์ก่อน–หลังประกาศ โดยเปรียบเทียบ Actual / Forecast / Previous รวมถึงการปรับตัวเลขย้อนหลัง และผลต่อการคาดการณ์ดอกเบี้ย Fed",
+      "news": "ประเด็นหลักคือเงินเฟ้อภาคบริการ ค่าเช่าที่อยู่อาศัย และต้นทุนผู้ผลิตจะชะลอต่อเนื่องหรือไม่ หาก CPI สูงกว่าคาดและ PPI ยืนยันแนวโน้มเดียวกัน ตลาดอาจปรับคาดการณ์ดอกเบี้ยขึ้น ส่งผลให้ USD และอัตราผลตอบแทนพันธบัตรแข็งขึ้น ขณะที่หุ้นเติบโต ทองคำ และ BTC มีความเสี่ยงผันผวน อย่างไรก็ตาม ผลตอบสนองทันทีขึ้นอยู่กับสิ่งที่ตลาดสะท้อนในราคาก่อนข่าวด้วย",
+      "detail": "ตัวอย่างสมมติด้านล่างเป็นกรณีเงินเฟ้อสูงกว่าคาดเท่านั้น ไม่ใช่สถานการณ์ตลาดที่ตรวจยืนยันล่าสุด",
+      "signals": [
+        [
+          "Stocks",
+          "bear"
+        ],
+        [
+          "XAUUSD",
+          "stress"
+        ],
+        [
+          "BTC",
+          "bear"
+        ],
+        [
+          "USD",
+          "bull"
+        ],
+        [
+          "Yields",
+          "bull"
+        ]
+      ],
+      "signalNote": "ตัวอย่าง: CPI สูงกว่าคาดอย่างมีนัยสำคัญ",
+      "status": "enabled",
+      "scenarioBasis": "illustrative"
     },
     {
       "title": "MRVL Scenario News Watch",
@@ -17,7 +51,18 @@
       "enabled": true,
       "frequency": "Hourly condition check",
       "delivery": "Push/email off",
-      "description": "Marvell AI custom silicon, Google design wins, optical networking and Bull / Base / Bear / Stress thesis shifts."
+      "description": "Marvell AI custom silicon, Google design wins, optical networking and Bull / Base / Bear / Stress thesis shifts.",
+      "scenario": "base",
+      "tags": [
+        "Custom Silicon",
+        "Google",
+        "Optical Networking"
+      ],
+      "summary": "ติดตามรายได้ AI และ design wins ของ Marvell รวมถึงการผลิตชิปเฉพาะทางให้ hyperscaler การเชื่อมต่อ optical และการเติบโตของตลาดเครือข่ายศูนย์ข้อมูล",
+      "news": "จุดตัดสินสำคัญคือคำสั่งซื้อใหม่และการ ramp production ว่าจะเปลี่ยนเป็นรายได้ตามคาดหรือไม่ ข่าวยืนยันการเพิ่ม guidance และคำสั่งซื้อ optical/networking จะสนับสนุน Bull ขณะที่การเลื่อนโครงการ ข้อจำกัด gross margin หรือการชะลอ AI capex จะเพิ่มน้ำหนักฝั่ง Bear",
+      "detail": "Scenario Base เป็นจุดตั้งต้นสำหรับอ่านข่าว ไม่ใช่การยืนยันมูลค่าหุ้นล่าสุด",
+      "status": "enabled",
+      "scenarioBasis": "illustrative"
     },
     {
       "title": "AVGO Scenario News Watch",
@@ -25,7 +70,18 @@
       "enabled": true,
       "frequency": "Hourly condition check",
       "delivery": "Push/email off",
-      "description": "Broadcom ASIC / TPU demand, AI growth guidance and financing-related scenario changes."
+      "description": "Broadcom ASIC / TPU demand, AI growth guidance and financing-related scenario changes.",
+      "scenario": "base",
+      "tags": [
+        "Google TPU",
+        "Custom ASIC",
+        "AI Revenue"
+      ],
+      "summary": "ติดตาม Broadcom ในห่วงโซ่ custom accelerator, networking และ AI infrastructure โดยวิเคราะห์ความต่อเนื่องของคำสั่งซื้อจากลูกค้ารายใหญ่และผลต่อกำไร",
+      "news": "ประเด็นสำคัญคือยอดขาย AI และ guidance ที่ประกาศจริง ความพร้อมของเงินทุนฝั่งลูกค้า และการเพิ่มขนาดการใช้งาน TPU/custom ASIC หากมีดีลใหม่พร้อมกำหนดส่งมอบชัดเจนจะสนับสนุน Bull แต่การรวมศูนย์รายได้ในลูกค้ารายใหญ่หรือปัญหา financing อาจกดดัน valuation",
+      "detail": "ตรวจคำยืนยันจากเอกสารบริษัทก่อนสรุปว่าข่าวมีผลเปลี่ยน thesis",
+      "status": "enabled",
+      "scenarioBasis": "illustrative"
     },
     {
       "title": "ORCL Scenario News Watch",
@@ -33,7 +89,92 @@
       "enabled": true,
       "frequency": "Hourly condition check",
       "delivery": "Push/email off",
-      "description": "Oracle OCI, data-center financing, credit spreads, capex and cash-flow scenario changes."
+      "description": "Oracle OCI, data-center financing, credit spreads, capex and cash-flow scenario changes.",
+      "scenario": "base",
+      "tags": [
+        "OCI",
+        "Data Center",
+        "Financing",
+        "FCF"
+      ],
+      "summary": "ติดตาม Oracle Cloud Infrastructure การลงทุนดาต้าเซ็นเตอร์ แหล่งเงินทุน และความสามารถในการแปลง backlog ให้เป็นรายได้และกระแสเงินสด",
+      "news": "การขยายตัวของ OCI อาจหนุนรายได้ระยะยาว แต่จำเป็นต้องเทียบกับ capex ต้นทุนหนี้ และความเสี่ยงด้านการดำเนินโครงการ หากความต้องการใช้งานที่ยืนยันได้เติบโตเร็วพร้อมต้นทุนทุนที่บริหารได้จะหนุน Bull ขณะที่ credit spreads กว้างขึ้นหรือโครงการล่าช้าจะเพิ่มแรงกดดัน",
+      "detail": "ให้ความสำคัญกับงบดุล กระแสเงินสด และเวลารับรู้รายได้มากกว่าข่าวข้อตกลงเพียงอย่างเดียว",
+      "status": "enabled",
+      "scenarioBasis": "illustrative"
+    },
+    {
+      "title": "NVDA Scenario News Watch",
+      "tags": [
+        "AI GPU",
+        "Blackwell",
+        "Hyperscaler Capex"
+      ],
+      "summary": "ติดตาม NVIDIA และห่วงโซ่ AI compute ทั้งความต้องการ GPU การส่งมอบระบบ การผลิตชิปขั้นสูง และสัญญาณอุปสงค์จากลูกค้า hyperscaler",
+      "news": "ข้อมูลที่มีผลต่อ thesis มากที่สุดคือยอดขาย Data Center, guidance, gross margin และความเร็วในการนำระบบรุ่นใหม่ไปใช้งานจริง หากคำสั่งซื้อยังเพิ่มพร้อม supply chain รองรับได้ อาจสนับสนุน Bull แต่หากลูกค้าเลื่อนลงทุนหรือความต้องการชะลอเมื่อเทียบกับต้นทุนที่สูงขึ้น น้ำหนัก Bear จะเพิ่ม",
+      "detail": "รายการนี้เป็น Watchlist บนเว็บ ยังไม่ได้ตั้ง ChatGPT Automation",
+      "category": "watchlist",
+      "enabled": false,
+      "status": "watchlist",
+      "scenario": "base",
+      "frequency": "ยังไม่ได้สร้าง Automation",
+      "delivery": "ไม่มีการแจ้งเตือน",
+      "scenarioBasis": "illustrative"
+    },
+    {
+      "title": "TSM Scenario News Watch",
+      "tags": [
+        "Foundry",
+        "Advanced Packaging",
+        "N2 / N3"
+      ],
+      "summary": "ติดตาม TSMC ในฐานะผู้ผลิตชิปหลักของอุตสาหกรรม AI ผ่านกำลังการผลิต leading-edge, advanced packaging และแผนขยายโรงงาน",
+      "news": "สิ่งที่ต้องดูคือรายได้รายเดือนและ guidance ที่ยืนยันจากบริษัท อัตราการใช้กำลังการผลิต อัตรากำไร และคำสั่งซื้อของลูกค้าชั้นนำ ข้อจำกัดด้าน capacity อาจช่วยสร้าง pricing power แต่การลงทุนโรงงานใหม่และความเสี่ยงด้านภูมิรัฐศาสตร์เป็นปัจจัยที่ต้องชั่งน้ำหนัก",
+      "detail": "รายการนี้เป็น Watchlist บนเว็บ ยังไม่ได้ตั้ง ChatGPT Automation",
+      "category": "watchlist",
+      "enabled": false,
+      "status": "watchlist",
+      "scenario": "base",
+      "frequency": "ยังไม่ได้สร้าง Automation",
+      "delivery": "ไม่มีการแจ้งเตือน",
+      "scenarioBasis": "illustrative"
+    },
+    {
+      "title": "SKYD Scenario News Watch",
+      "tags": [
+        "Volatility",
+        "Unusual Volume",
+        "Corporate Actions"
+      ],
+      "summary": "ติดตามข่าวและความผันผวนของ SKYD โดยแยกการเคลื่อนไหวจาก flow ระยะสั้นออกจากปัจจัยพื้นฐานและการดำเนินการของบริษัท",
+      "news": "จุดที่ต้องตรวจคือเอกสารบริษัท ข่าวเพิ่มทุน สิทธิผู้ถือหุ้น warrant หรือ corporate action ที่อาจส่งผลต่อราคา โดยเทียบกับปริมาณซื้อขายและการเคลื่อนไหวนอกเวลาทำการ กรณีราคาผันผวนสูงไม่ควรสรุปว่าเป็นข่าวบวกหรือลบก่อนตรวจแหล่งข่าวต้นทาง",
+      "detail": "รายการนี้เป็น Watchlist บนเว็บ ยังไม่ได้ตั้ง ChatGPT Automation",
+      "category": "watchlist",
+      "enabled": false,
+      "status": "watchlist",
+      "scenario": "base",
+      "frequency": "ยังไม่ได้สร้าง Automation",
+      "delivery": "ไม่มีการแจ้งเตือน",
+      "scenarioBasis": "illustrative"
+    },
+    {
+      "title": "AMZN Scenario News Watch",
+      "tags": [
+        "AWS",
+        "Retail",
+        "Advertising",
+        "Capex"
+      ],
+      "summary": "ติดตาม Amazon ผ่าน AWS, AI infrastructure, โฆษณา, ธุรกิจค้าปลีก และผลตอบแทนจากเงินลงทุน",
+      "news": "ประเด็นหลักคือการเติบโตของ AWS เทียบกับต้นทุน AI capex รวมทั้งอัตรากำไรค้าปลีกและรายได้โฆษณา หาก Cloud โตเร็วและลงทุนแปลงเป็นกระแสเงินสดได้ดีจะช่วยหนุน Bull แต่ถ้าต้นทุนเพิ่มเร็วกว่าการสร้างรายได้ หรือกำลังซื้อผู้บริโภคอ่อนลงก็เพิ่มความเสี่ยงฝั่ง Bear",
+      "detail": "รายการนี้เป็น Watchlist บนเว็บ ยังไม่ได้ตั้ง ChatGPT Automation",
+      "category": "watchlist",
+      "enabled": false,
+      "status": "watchlist",
+      "scenario": "base",
+      "frequency": "ยังไม่ได้สร้าง Automation",
+      "delivery": "ไม่มีการแจ้งเตือน",
+      "scenarioBasis": "illustrative"
     },
     {
       "title": "Bangkok – Fukuoka flight watch",
@@ -41,7 +182,18 @@
       "enabled": true,
       "frequency": "Every 6 hours",
       "delivery": "Push/email on",
-      "description": "Round-trip March 2027 itinerary for two; notify only when verified total price meets the specified THB 24,000 threshold."
+      "description": "Round-trip March 2027 itinerary for two; notify only when verified total price meets the specified THB 24,000 threshold.",
+      "scenario": null,
+      "tags": [
+        "Travel",
+        "March 2027",
+        "Price Watch"
+      ],
+      "summary": "ติดตามราคาตั๋วไป–กลับกรุงเทพฯ–ฟูกุโอกะ สำหรับ 2 คนในเดือนมีนาคม 2027 เทียบเงื่อนไขเที่ยว 6 วัน 5 คืน และสัมภาระที่กำหนด",
+      "news": "ระบบแจ้งเฉพาะเมื่อพบตัวเลือกที่ตรวจสอบยอดสุทธิได้และราคาไม่เกิน 24,000 บาทสำหรับสองคน โดยต้องนับภาษีและค่ากระเป๋ารวมครบแล้ว การ์ดนี้เป็นสถานะงานติดตาม ไม่ใช่หลักฐานว่าพบตั๋วที่เข้าเงื่อนไขแล้ว",
+      "detail": "ไม่ใช้ Scenario ตลาดหุ้นกับการติดตามราคาตั๋ว",
+      "status": "enabled",
+      "scenarioBasis": null
     },
     {
       "title": "9 AM stock price summary",
@@ -49,7 +201,19 @@
       "enabled": false,
       "frequency": "Daily 09:00 when enabled",
       "delivery": "Off",
-      "description": "TSLA, NVDA, META, AMD, MP and UUUU price and momentum monitoring (paused)."
+      "description": "TSLA, NVDA, META, AMD, MP and UUUU price and momentum monitoring (paused).",
+      "scenario": null,
+      "tags": [
+        "TSLA",
+        "NVDA",
+        "META",
+        "AMD"
+      ],
+      "summary": "งานติดตามราคาหุ้นช่วงเช้าสำหรับพอร์ตเดิม ขณะนี้หยุดใช้งาน",
+      "news": "รูปแบบที่กำหนดไว้คือดูราคา การเปลี่ยนแปลงรายวัน EMA, RSI และโซนเข้าซื้อของ TSLA, NVDA, META, AMD, MP และ UUUU ยังไม่มีการส่งรายงานใหม่จากงานนี้เพราะอยู่ในสถานะปิด",
+      "detail": "รายการนี้ไม่ถูกนับเป็นการเฝ้าข่าวรายบริษัท",
+      "status": "paused",
+      "scenarioBasis": null
     },
     {
       "title": "Morning stock price review",
@@ -57,7 +221,19 @@
       "enabled": false,
       "frequency": "Multiple mornings when enabled",
       "delivery": "Off",
-      "description": "TSLA, NVDA, META, AMD, MP, UUUU and IREN price, EMA, RSI and entry-zone monitoring (paused)."
+      "description": "TSLA, NVDA, META, AMD, MP, UUUU and IREN price, EMA, RSI and entry-zone monitoring (paused).",
+      "scenario": null,
+      "tags": [
+        "EMA / RSI",
+        "Entry Zones",
+        "DCA"
+      ],
+      "summary": "งานสรุปหุ้นอีกชุดหนึ่งที่เคยตรวจหลายรอบช่วงเช้า ขณะนี้หยุดใช้งาน",
+      "news": "การตรวจครอบคลุม TSLA, NVDA, META, AMD, MP, UUUU และ IREN พร้อมกรอบ momentum และตำแหน่งเทียบ entry zone ไม่มีข้อมูลอัปเดตใหม่จากงานนี้จนกว่าจะกลับมาเปิดใช้งาน",
+      "detail": "แสดงเพื่อรักษาประวัติรายการงานเท่านั้น",
+      "status": "paused",
+      "scenarioBasis": null
     }
-  ]
+  ],
+  "note": "ข้อมูลสถานะ Automation เป็น snapshot; 4 หุ้นใหม่เป็น Watchlist ยังไม่มีการตรวจข่าวอัตโนมัติ; scenario และ cross-asset เป็นกรอบตัวอย่าง ไม่ใช่ข่าวเรียลไทม์"
 }
