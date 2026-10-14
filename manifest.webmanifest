@@ -1,8 +1,8 @@
 {
-  "name": "Global Capital Flow",
-  "short_name": "Capital Flow",
-  "description": "Interactive global capital-flow cycle and market regime map.",
-  "start_url": "./",
+  "name": "My World 2.0",
+  "short_name": "My World",
+  "description": "Personal intelligence dashboard with finance, news, travel and monitoring.",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#050b14",
