@@ -1,0 +1,63 @@
+{
+  "snapshot": "2026-10-14 09:25",
+  "timezone": "Asia/Bangkok",
+  "source": "ChatGPT Automations status checked 2026-10-14",
+  "items": [
+    {
+      "title": "US Inflation News Watch",
+      "category": "analysis",
+      "enabled": true,
+      "frequency": "Hourly condition check",
+      "delivery": "Push/email off",
+      "description": "Material updates on CPI, core CPI, PPI, PCE, inflation expectations, consensus revisions and potential XAUUSD / USD / yield response."
+    },
+    {
+      "title": "MRVL Scenario News Watch",
+      "category": "analysis",
+      "enabled": true,
+      "frequency": "Hourly condition check",
+      "delivery": "Push/email off",
+      "description": "Marvell AI custom silicon, Google design wins, optical networking and Bull / Base / Bear / Stress thesis shifts."
+    },
+    {
+      "title": "AVGO Scenario News Watch",
+      "category": "analysis",
+      "enabled": true,
+      "frequency": "Hourly condition check",
+      "delivery": "Push/email off",
+      "description": "Broadcom ASIC / TPU demand, AI growth guidance and financing-related scenario changes."
+    },
+    {
+      "title": "ORCL Scenario News Watch",
+      "category": "analysis",
+      "enabled": true,
+      "frequency": "Hourly condition check",
+      "delivery": "Push/email off",
+      "description": "Oracle OCI, data-center financing, credit spreads, capex and cash-flow scenario changes."
+    },
+    {
+      "title": "Bangkok – Fukuoka flight watch",
+      "category": "other",
+      "enabled": true,
+      "frequency": "Every 6 hours",
+      "delivery": "Push/email on",
+      "description": "Round-trip March 2027 itinerary for two; notify only when verified total price meets the specified THB 24,000 threshold."
+    },
+    {
+      "title": "9 AM stock price summary",
+      "category": "other",
+      "enabled": false,
+      "frequency": "Daily 09:00 when enabled",
+      "delivery": "Off",
+      "description": "TSLA, NVDA, META, AMD, MP and UUUU price and momentum monitoring (paused)."
+    },
+    {
+      "title": "Morning stock price review",
+      "category": "other",
+      "enabled": false,
+      "frequency": "Multiple mornings when enabled",
+      "delivery": "Off",
+      "description": "TSLA, NVDA, META, AMD, MP, UUUU and IREN price, EMA, RSI and entry-zone monitoring (paused)."
+    }
+  ]
+}
