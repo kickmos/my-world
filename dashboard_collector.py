@@ -1,10 +1,26 @@
 #!/usr/bin/env python3
-import json, re, urllib.parse, urllib.request, xml.etree.ElementTree as ET
+import json, re, os, html as htmlmod, urllib.parse, urllib.request, xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 from zoneinfo import ZoneInfo
 
-UA={"User-Agent":"Mozilla/5.0 MyWorldDashboard/1.0"}
+UA={"User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124 Safari/537.36"}
+GEMINI_API_KEY=os.environ.get("GEMINI_API_KEY","")
+GEMINI_MODEL="gemini-2.5-flash-lite"
+OG_CACHE={}
+
+POSITIVE_WORDS=[
+ "beat","beats","surge","surges","rally","rallies","gain","gains","upgrade","upgrades",
+ "record high","approval","approved","partnership","deal","contract","expands","expansion",
+ "growth","strong demand","raises guidance","profit rises","revenue rises","wins","breakthrough",
+ "investment","invests","launch success","cuts prices","eases","ceasefire"
+]
+NEGATIVE_WORDS=[
+ "miss","misses","plunge","plunges","drop","drops","downgrade","downgrades","lawsuit",
+ "tariff","war","attack","strikes","layoff","layoffs","cuts jobs","weak guidance","delay",
+ "delays","crackdown","ban","bans","investigation","probe","fraud","loss widens","default",
+ "inflation rises","hot inflation","higher inflation","sanctions","escalation","slump","falls"
+]
 BKK=ZoneInfo("Asia/Bangkok")
 NY=ZoneInfo("America/New_York")
 
@@ -76,6 +92,99 @@ def clean(s):
     s=re.sub(r"<[^>]+>"," ",s or "")
     return re.sub(r"\s+"," ",s).strip()
 
+def headline_sentiment(title, summary=""):
+    text=(title+" "+summary).lower()
+    pos=sum(1 for w in POSITIVE_WORDS if w in text)
+    neg=sum(1 for w in NEGATIVE_WORDS if w in text)
+    if pos>=2 and pos>neg:return "positive"
+    if neg>=2 and neg>pos:return "negative"
+    if pos==1 and neg==0:return "positive"
+    if neg==1 and pos==0:return "negative"
+    return "neutral"
+
+def short_summary(title, summary=""):
+    text=clean(summary)
+    if text:
+        text=re.sub(r"^[^:]{0,45}:\s*","",text)
+        parts=re.split(r"(?<=[.!?])\s+",text)
+        out=" ".join(parts[:2]).strip()
+        if len(out)>190:out=out[:187].rsplit(" ",1)[0]+"..."
+        if out and out.lower()!=title.lower():return out
+    # fallback: convert headline into a compact factual note without inventing facts
+    return "ประเด็นล่าสุด: "+title
+
+def extract_rss_image(item):
+    for child in list(item):
+        tag=child.tag.lower()
+        if tag.endswith("thumbnail") or tag.endswith("content") or tag.endswith("enclosure"):
+            url=child.attrib.get("url") or child.attrib.get("href")
+            typ=(child.attrib.get("type") or "").lower()
+            medium=(child.attrib.get("medium") or "").lower()
+            if url and ("image" in typ or medium=="image" or tag.endswith("thumbnail")):
+                return url
+    desc=item.findtext("description") or ""
+    m=re.search(r'<img[^>]+src=["\']([^"\']+)["\']',desc,re.I)
+    return htmlmod.unescape(m.group(1)) if m else None
+
+def fetch_og_image(url, timeout=8):
+    if not url:return None
+    if url in OG_CACHE:return OG_CACHE[url]
+    try:
+        raw=get_bytes(url,timeout).decode("utf-8","ignore")[:120000]
+        pats=[
+          r'<meta[^>]+property=["\']og:image(?::url)?["\'][^>]+content=["\']([^"\']+)["\']',
+          r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image(?::url)?["\']',
+          r'<meta[^>]+name=["\']twitter:image(?::src)?["\'][^>]+content=["\']([^"\']+)["\']',
+          r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image(?::src)?["\']',
+        ]
+        for p in pats:
+            m=re.search(p,raw,re.I)
+            if m:
+                image=htmlmod.unescape(m.group(1)).strip()
+                if image.startswith("//"):image="https:"+image
+                if image.startswith("http"):
+                    OG_CACHE[url]=image;return image
+    except Exception:pass
+    OG_CACHE[url]=None
+    return None
+
+def fallback_image(category):
+    return {
+      "markets":"https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=1000&q=70",
+      "politics":"https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&w=1000&q=70",
+      "world":"https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1000&q=70",
+      "tech_ai":"https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1000&q=70",
+      "concert":"https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1000&q=70",
+      "travel":"https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1000&q=70",
+    }.get(category,"https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=1000&q=70")
+
+def gemini_refine(items):
+    if not GEMINI_API_KEY or not items:return items
+    slim=[{"id":i,"title":x.get("title",""),"summary":x.get("summary","")} for i,x in enumerate(items)]
+    prompt="""คุณเป็น editor ข่าวธุรกิจภาษาไทย ประเมิน tone ของข่าวทั่วไป ไม่ใช่ผลต่อสินทรัพย์เฉพาะตัว
+สำหรับแต่ละข่าว:
+- sentiment ต้องเป็น positive, negative หรือ neutral
+- summary_th สรุปข้อเท็จจริง 1 ประโยคสั้น ไม่เกิน 150 ตัวอักษร
+- ห้ามเพิ่มข้อมูลที่ไม่มีใน title/summary
+ตอบ JSON array เท่านั้น รูปแบบ [{\"id\":0,\"sentiment\":\"neutral\",\"summary_th\":\"...\"}]
+INPUT:
+"""+json.dumps(slim,ensure_ascii=False)
+    try:
+        url=f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key="+urllib.parse.quote(GEMINI_API_KEY)
+        body=json.dumps({"contents":[{"parts":[{"text":prompt}]}],"generationConfig":{"temperature":0.1,"responseMimeType":"application/json"}}).encode()
+        req=urllib.request.Request(url,data=body,headers={**UA,"Content-Type":"application/json"})
+        with urllib.request.urlopen(req,timeout=30) as r:data=json.loads(r.read().decode())
+        text=data["candidates"][0]["content"]["parts"][0]["text"]
+        parsed=json.loads(text)
+        by_id={int(x["id"]):x for x in parsed if isinstance(x,dict) and "id" in x}
+        for i,item in enumerate(items):
+            v=by_id.get(i,{})
+            if v.get("sentiment") in ("positive","negative","neutral"):item["sentiment"]=v["sentiment"]
+            if v.get("summary_th"):item["summaryShort"]=clean(v["summary_th"])[:180]
+    except Exception as e:
+        print("Gemini dashboard refine fallback:",str(e)[:160])
+    return items
+
 def parse_date(text):
     if not text:return None
     try:
@@ -95,7 +204,8 @@ def rss_items(url,source,limit=20):
         desc=clean(item.findtext("description"))
         if not title or not link:continue
         dt=parse_date(pub)
-        out.append({"title":title,"url":link,"source":source,"publishedAt":dt.isoformat() if dt else None,"summary":desc[:260]})
+        img=extract_rss_image(item)
+        out.append({"title":title,"url":link,"source":source,"publishedAt":dt.isoformat() if dt else None,"summary":desc[:400],"imageUrl":img})
     if not out:
         ns={"a":"http://www.w3.org/2005/Atom"}
         for item in root.findall(".//a:entry",ns):
@@ -103,7 +213,7 @@ def rss_items(url,source,limit=20):
             link_node=item.find("a:link",ns);link=link_node.attrib.get("href","") if link_node is not None else ""
             pub=clean(item.findtext("a:updated",default="",namespaces=ns) or item.findtext("a:published",default="",namespaces=ns))
             dt=parse_date(pub)
-            if title and link:out.append({"title":title,"url":link,"source":source,"publishedAt":dt.isoformat() if dt else None,"summary":""})
+            if title and link:out.append({"title":title,"url":link,"source":source,"publishedAt":dt.isoformat() if dt else None,"summary":"","imageUrl":None})
     return out[:limit]
 
 def google_news(query,source,limit=12):
@@ -127,10 +237,20 @@ def collect_news():
                 x["breaking"]=any(k in text for k in BREAKING)
                 x["vip"]=any(k in text for k in VIP_KEYWORDS)
                 x["category"]=cat
+                x["sentiment"]=headline_sentiment(x["title"],x.get("summary",""))
+                x["summaryShort"]=short_summary(x["title"],x.get("summary",""))
+                if not x.get("imageUrl"):
+                    x["imageUrl"]=fetch_og_image(x.get("url")) or fallback_image(cat)
                 arr.append(x)
         arr.sort(key=lambda x:(x.get("breaking",False),x.get("vip",False),x.get("publishedAt") or ""),reverse=True)
         buckets[cat]=arr[:10]
     pool=[x for v in buckets.values() for x in v]
+    unique=[];seen_ids=set()
+    for x in pool:
+        key=x.get("url") or x.get("title")
+        if key in seen_ids:continue
+        seen_ids.add(key);unique.append(x)
+    gemini_refine(unique[:32])
     pool.sort(key=lambda x:(x.get("breaking",False),x.get("vip",False),x.get("publishedAt") or ""),reverse=True)
     buckets["top"]=pool[:16]
     return buckets
@@ -189,8 +309,13 @@ def macro_events():
     return items[:12]
 
 def life_events():
-    today=datetime.now(BKK).date()
-    return [x for x in LIFE_EVENTS if datetime.fromisoformat(x["date"]).date()>=today]
+    today=datetime.now(BKK).date();out=[]
+    for raw in LIFE_EVENTS:
+        if datetime.fromisoformat(raw["date"]).date()<today:continue
+        x=dict(raw)
+        x["imageUrl"]=fetch_og_image(x.get("url")) or fallback_image("concert")
+        out.append(x)
+    return out
 
 def travel_promos():
     arr=[]
@@ -212,7 +337,9 @@ def travel_promos():
     for x in arr:
         key=(x.get("provider"),re.sub(r"\W+","",x.get("title","").lower())[:80])
         if key in seen:continue
-        seen.add(key);out.append(x)
+        seen.add(key)
+        x["imageUrl"]=fetch_og_image(x.get("bookingUrl") or x.get("url")) or fallback_image("travel")
+        out.append(x)
     return out[:18]
 
 def main():
