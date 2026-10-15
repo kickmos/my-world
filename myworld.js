@@ -17,7 +17,7 @@ function modify(fn){fn();save();drawWidgets()}
 function move(id,step){modify(()=>{const i=layout.order.indexOf(id),j=i+step;if(j>=0&&j<layout.order.length)[layout.order[i],layout.order[j]]=[layout.order[j],layout.order[i]]})}
 function drawWidgets(){const area=document.getElementById("widgetGrid");area.replaceChildren();const active=layout.order.filter(id=>!layout.hidden.includes(id));for(const id of active){const w=widgets.find(x=>x.id===id);const card=make("article","widget"+(layout.large.includes(id)?" large":""));const top=make("div","widget-title");top.append(make("span","tileicon",w.icon));const heading=make("div","grow");heading.append(make("h3","",w.name),make("div","status","Widget · Your dashboard"));top.append(heading);card.append(top,make("p","",w.desc));const tagarea=make("div");for(const t of w.tags)tagarea.append(make("span","chip",t));card.append(tagarea);const link=make("a","cardlink",w.label+" →");link.href=w.url;card.append(link);if(editing){const controls=make("div","controls");const i=layout.order.indexOf(id);controls.append(button("↑",()=>move(id,-1),i===0),button("↓",()=>move(id,1),i===layout.order.length-1),button(layout.large.includes(id)?"Small":"Large",()=>modify(()=>{layout.large=layout.large.includes(id)?layout.large.filter(x=>x!==id):[...layout.large,id]})),button("Hide",()=>modify(()=>layout.hidden.push(id))));card.append(controls)}area.append(card)}const box=document.getElementById("widgetPicker");box.classList.toggle("hidden",!editing);const picker=document.getElementById("pickerItems");picker.replaceChildren();for(const id of layout.order.filter(x=>layout.hidden.includes(x))){const w=widgets.find(x=>x.id===id);picker.append(button("+ "+w.name,()=>modify(()=>layout.hidden=layout.hidden.filter(x=>x!==id))))}if(!picker.childNodes.length)picker.append(make("div","status","เปิดการ์ดครบแล้ว"));document.getElementById("customize").textContent=editing?"✓ Done":"⚙ Customize"}
 document.getElementById("customize").onclick=()=>{editing=!editing;drawWidgets()};
-const snapshots=[
+const fallbackSnapshots=[
 {topic:"US Inflation News Watch",kind:"Macro",impact:95,relevance:95,freshness:35,credibility:65,urgency:75,brief:"ติดตาม CPI, PPI และผลต่อ USD, Bond Yields, หุ้น, BTC และ XAUUSD ต้องรอ Actual และข้อมูลยืนยันก่อนสรุปสถานะตลาด",url:"./notifications.html"},
 {topic:"NVDA / TSM / AVGO / MRVL",kind:"Equity",impact:75,relevance:92,freshness:30,credibility:60,urgency:40,brief:"อ่านความเชื่อมโยงของ AI Capex กับ GPU, Foundry, Custom ASIC และ Optical Networking ผ่านรายการเฝ้าติดตาม",url:"./notifications.html"},
 {topic:"Oracle & AI Data Centers",kind:"Equity",impact:65,relevance:82,freshness:30,credibility:60,urgency:35,brief:"จุดที่ต้องติดตามคือ OCI, Capex, Financing และ Free Cash Flow; ยังไม่ใช่การยืนยันข่าวใหม่",url:"./notifications.html"},
@@ -25,8 +25,61 @@ const snapshots=[
 ];
 const weights={impact:.30,relevance:.25,freshness:.20,credibility:.15,urgency:.10};
 function score(e){return Object.entries(weights).reduce((sum,[k,v])=>sum+e[k]*v,0)}
-function drawFeed(){const list=document.getElementById("feedList");list.replaceChildren();for(const [i,f] of [...snapshots].sort((a,b)=>score(b)-score(a)).entries()){const card=make("article","feeditem");card.append(make("div","rank",String(i+1).padStart(2,"0")));const body=make("div","grow");body.append(make("div","feedmeta","TOPIC BRIEF · SNAPSHOT · "+f.kind),make("h3","",f.topic),make("p","",f.brief),make("div","priority","Priority score "+score(f).toFixed(0)+"/100 · คะแนนสาธิต ไม่ใช่ความน่าจะเป็น"));const a=make("a","cardlink","ดูรายละเอียด →");a.href=f.url;body.append(a,button("Pin topic to Dashboard",()=>{const target=f.kind==="Travel"?"travel":f.kind==="Macro"?"calendar":"watchlist";modify(()=>{layout.hidden=layout.hidden.filter(id=>id!==target)});setMode("dashboard");document.getElementById("dashboardView").scrollIntoView({behavior:"smooth",block:"start"})}));card.append(body);list.append(card)}}
+function drawFeed(){
+  const list=document.getElementById("feedList");list.replaceChildren();
+  const live=(window.DASHBOARD_DATA?.news?.top||[]);
+  if(live.length){
+    for(const [i,n] of live.slice(0,12).entries()){
+      const card=make("article","feeditem");
+      card.append(make("div","rank",String(i+1).padStart(2,"0")));
+      const body=make("div","grow");
+      const meta=[n.category?.toUpperCase(),n.source,n.publishedAt?new Date(n.publishedAt).toLocaleString("th-TH",{timeZone:"Asia/Bangkok",dateStyle:"short",timeStyle:"short"}):""].filter(Boolean).join(" · ");
+      body.append(make("div","feedmeta",(n.breaking?"BREAKING · ":"")+(n.vip?"VIP · ":"")+meta),make("h3","",n.title),make("p","",n.summary||""));
+      const a=make("a","cardlink","อ่านต้นทาง →");a.href=n.url;a.target="_blank";a.rel="noopener noreferrer";body.append(a);
+      card.append(body);list.append(card);
+    }
+    return;
+  }
+  for(const [i,f] of [...fallbackSnapshots].sort((a,b)=>score(b)-score(a)).entries()){
+    const card=make("article","feeditem");card.append(make("div","rank",String(i+1).padStart(2,"0")));
+    const body=make("div","grow");body.append(make("div","feedmeta","TOPIC BRIEF · SNAPSHOT · "+f.kind),make("h3","",f.topic),make("p","",f.brief),make("div","priority","Priority score "+score(f).toFixed(0)+"/100 · fallback"));
+    const a=make("a","cardlink","ดูรายละเอียด →");a.href=f.url;body.append(a);card.append(body);list.append(card);
+  }
+}
 function setMode(next){mode=next;document.getElementById("dashboardView").classList.toggle("hidden",next!=="dashboard");document.getElementById("feedView").classList.toggle("hidden",next!=="feed");document.getElementById("dashboardToggle").classList.toggle("active",next==="dashboard");document.getElementById("feedToggle").classList.toggle("active",next==="feed");}
 document.getElementById("dashboardToggle").onclick=()=>setMode("dashboard");document.getElementById("feedToggle").onclick=()=>setMode("feed");
 const pages=["home","finance","discover","travel","life","alerts"];function route(){let current=location.hash.replace("#","")||"home";if(!pages.includes(current))current="home";for(const p of pages)document.getElementById("page-"+p).classList.toggle("hidden",current!==p);document.querySelectorAll("[data-route]").forEach(el=>{el.classList.toggle("active",el.dataset.route===current);if(el.dataset.route===current)el.setAttribute("aria-current","page");else el.removeAttribute("aria-current")});window.scrollTo(0,0)}
 window.addEventListener("hashchange",route);document.getElementById("resetLayout").onclick=()=>{layout={order:[...defaultOrder],hidden:["travel","world"],large:["flow"]};save();drawWidgets()};drawWidgets();drawFeed();route();
+
+
+function fmtBangkok(iso){
+  try{return new Date(iso).toLocaleString("th-TH",{timeZone:"Asia/Bangkok",dateStyle:"medium",timeStyle:"short"})}catch{return iso||""}
+}
+function renderMacro(){
+  const box=document.getElementById("macroEventTable"); if(!box)return;
+  const rows=window.DASHBOARD_DATA?.financeEvents||[];
+  box.innerHTML=rows.length?`<div class="macro-table">
+    <div class="macro-row macro-head"><span>Event</span><span>วันที่</span><span>เวลาไทย</span><span>Impact</span></div>
+    ${rows.map(e=>`<a class="macro-row" href="${e.url}" target="_blank" rel="noopener"><strong>${e.title}</strong><span>${e.date}</span><span>${e.timeTH}</span><span class="impact-red">HIGH</span></a>`).join("")}
+  </div>`:'<div class="status">ยังดึงปฏิทินไม่ได้</div>';
+}
+function renderDiscover(){
+  const box=document.getElementById("discoverNews"); if(!box)return;
+  const data=window.DASHBOARD_DATA?.news||{};
+  const cats=[["markets","Markets / Crypto"],["politics","Politics"],["world","World / Geopolitics"],["tech_ai","Tech / AI"]];
+  box.innerHTML=cats.map(([key,label])=>`<section class="news-col"><h2>${label}</h2>${(data[key]||[]).slice(0,6).map(n=>`<a class="news-row" href="${n.url}" target="_blank" rel="noopener"><div class="news-row-meta">${n.breaking?'<b>BREAKING</b> ':''}${n.vip?'<i>VIP</i> ':''}${n.source||""}</div><strong>${n.title}</strong><span>${n.publishedAt?fmtBangkok(n.publishedAt):""}</span></a>`).join("")||'<div class="status">No recent items</div>'}</section>`).join("");
+  const u=document.getElementById("discoverUpdated");if(u&&window.DASHBOARD_DATA?.updated)u.textContent="Updated "+fmtBangkok(window.DASHBOARD_DATA.updated);
+  const cp=document.getElementById("connectorPlan");if(cp)cp.innerHTML='<span class="chip">X / posts</span><span class="chip">Reddit</span><span class="chip">YouTube</span><span class="chip">Google Trends</span>';
+}
+function renderLife(){
+  const box=document.getElementById("lifeEventList");if(!box)return;
+  const rows=window.DASHBOARD_DATA?.lifeEvents||[];
+  box.innerHTML=rows.map(e=>`<article class="event-card"><div class="event-date"><b>${e.date}</b><span>${e.time}</span></div><div class="grow"><div class="event-type">${e.type}</div><h3>${e.title}</h3><p>${e.venue}</p><a class="cardlink" href="${e.url}" target="_blank" rel="noopener">จอง/ดูรายละเอียดกับ ${e.booking} →</a></div></article>`).join("")||'<div class="status">ยังไม่มี event ที่ยืนยัน</div>';
+}
+function renderTravel(){
+  const box=document.getElementById("travelPromoList");if(!box)return;
+  const rows=window.DASHBOARD_DATA?.travelPromos||[];
+  box.innerHTML=rows.map(p=>`<article class="deal-card ${p.hot?"hot":""}">${p.hot?'<span class="hotdeal">HOT DEAL ≥50%</span>':""}<div class="deal-provider">${p.provider||p.source||""}</div><h3>${p.title}</h3>${p.discountPct?'<div class="deal-discount">-'+p.discountPct+'%</div>':""}<p>${p.publishedAt?"พบเมื่อ "+fmtBangkok(p.publishedAt):"ตรวจสอบ availability และราคาสุทธิที่หน้า provider"}</p><div class="deal-actions"><a href="${p.bookingUrl||p.url}" target="_blank" rel="noopener">ไปจอง/ดูโปร →</a>${p.url&&p.url!==p.bookingUrl?'<a class="secondary" href="'+p.url+'" target="_blank" rel="noopener">แหล่งที่พบ</a>':""}</div></article>`).join("")||'<div class="status">ยังไม่พบโปรล่าสุด</div>';
+}
+function renderLiveDashboard(){renderMacro();renderDiscover();renderLife();renderTravel();}
+renderLiveDashboard();
