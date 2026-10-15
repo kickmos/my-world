@@ -36,6 +36,8 @@ jobs:
         run: python3 collector.py
 
       - name: Generate dashboard intelligence
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python3 dashboard_collector.py
 
       - name: Configure Pages
