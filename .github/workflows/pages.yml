@@ -28,11 +28,15 @@ jobs:
 
       - name: Validate app
         run: |
-          python3 -m py_compile collector.py
+          python3 -m py_compile collector.py dashboard_collector.py
           node --check app-live.js
+          node --check myworld.js
 
       - name: Generate live free-market snapshot
         run: python3 collector.py
+
+      - name: Generate dashboard intelligence
+        run: python3 dashboard_collector.py
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
