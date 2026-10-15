@@ -14,13 +14,15 @@ POSITIVE_WORDS=[
  "beat","beats","surge","surges","rally","rallies","gain","gains","upgrade","upgrades",
  "record high","approval","approved","partnership","deal","contract","expands","expansion",
  "growth","strong demand","raises guidance","profit rises","revenue rises","wins","breakthrough",
- "investment","invests","launch success","cuts prices","eases","ceasefire"
+ "investment","invests","launch success","cuts prices","eases","ceasefire",
+ "revenue up","revenue rises","profit up","profit rises","sales up","orders up","raises target","raises forecast","outperforms"
 ]
 NEGATIVE_WORDS=[
  "miss","misses","plunge","plunges","drop","drops","downgrade","downgrades","lawsuit",
  "tariff","war","attack","strikes","layoff","layoffs","cuts jobs","weak guidance","delay",
  "delays","crackdown","ban","bans","investigation","probe","fraud","loss widens","default",
- "inflation rises","hot inflation","higher inflation","sanctions","escalation","slump","falls"
+ "inflation rises","hot inflation","higher inflation","sanctions","escalation","slump","falls",
+ "mass shooting","shooting plot","arrest","arrests","killed","death","deaths","crash","collapse","warning","recall"
 ]
 BKK=ZoneInfo("Asia/Bangkok")
 NY=ZoneInfo("America/New_York")
@@ -90,7 +92,9 @@ def get_bytes(url,timeout=15):
     with urllib.request.urlopen(req,timeout=timeout) as r:return r.read()
 
 def clean(s):
-    s=re.sub(r"<[^>]+>"," ",s or "")
+    s=htmlmod.unescape(s or "")
+    s=re.sub(r"<[^>]+>"," ",s)
+    s=s.replace("\xa0"," ")
     return re.sub(r"\s+"," ",s).strip()
 
 def headline_sentiment(title, summary=""):
@@ -104,15 +108,19 @@ def headline_sentiment(title, summary=""):
     return "neutral"
 
 def short_summary(title, summary=""):
+    title_clean=clean(title)
     text=clean(summary)
     if text:
         text=re.sub(r"^[^:]{0,45}:\s*","",text)
+        # strip publisher suffixes commonly repeated by Google News descriptions
+        text=re.sub(r"\s+(Reuters|Bloomberg|CNBC|WSJ|Yahoo Finance|Breakingthenews\.net)\s*$","",text,flags=re.I)
         parts=re.split(r"(?<=[.!?])\s+",text)
         out=" ".join(parts[:2]).strip()
         if len(out)>190:out=out[:187].rsplit(" ",1)[0]+"..."
-        if out and out.lower()!=title.lower():return out
-    # fallback: convert headline into a compact factual note without inventing facts
-    return "ประเด็นล่าสุด: "+title
+        norm=lambda x:re.sub(r"\W+","",x.lower())
+        if out and norm(out)!=norm(title_clean) and norm(title_clean) not in norm(out):
+            return out
+    return "สรุป: "+title_clean
 
 def extract_rss_image(item):
     for child in list(item):
