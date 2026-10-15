@@ -18,3 +18,29 @@ button,input{font:inherit}button{cursor:pointer}button:focus-visible,a:focus-vis
 .bottombar{display:none}.hidden{display:none!important}.alertbadge{background:#183c51;color:#a1e1ff;border-radius:99px;padding:4px 8px;font-size:11px}
 @media(max-width:930px){.layout{display:block}.sidebar{display:none}.main{padding:18px 18px 110px}.brand-mobile{display:block}.bottombar{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;bottom:0;left:0;right:0;background:#0b1929ed;backdrop-filter:blur(12px);border-top:1px solid #37526c;padding:9px 4px calc(10px + env(safe-area-inset-bottom));z-index:10}.bottombar a{text-align:center;font-size:10px;color:#9fb6cb;font-weight:700}.bottombar a span{display:block;font-size:20px}.bottombar a.active{color:#90dcff}}
 @media(max-width:550px){.grid,.modulegrid{grid-template-columns:1fr}.widget.large{grid-column:auto}.topbar{margin-bottom:25px}.segment{width:100%;display:grid;grid-template-columns:1fr 1fr}.segment button{padding:10px 5px}.widget{padding:16px}.sectionhead{align-items:flex-start}}
+
+.primarynav{border-color:#4f8cb0;background:#15354c}
+.panelhead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.impact-badge,.impact-red{display:inline-flex;align-items:center;justify-content:center;border:1px solid #b44752;background:#40191e;color:#ff9aa4;border-radius:999px;padding:4px 8px;font-size:9px;font-weight:900;letter-spacing:.06em}
+.macro-table{margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.macro-row{display:grid;grid-template-columns:minmax(180px,1.5fr) 120px 90px 80px;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid rgba(40,64,90,.55);font-size:12px}
+.macro-row:first-child{border-top:0}.macro-head{background:#0d1b2c;color:var(--muted);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.news-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin-bottom:13px}
+.news-col{background:linear-gradient(155deg,#142740,#0d1d30);border:1px solid var(--line);border-radius:17px;padding:17px}
+.news-col h2{margin-bottom:10px}
+.news-row{display:block;padding:10px 0;border-top:1px solid rgba(40,64,90,.55)}
+.news-row strong{display:block;font-size:13px;line-height:1.4}.news-row span{font-size:10px;color:var(--muted)}
+.news-row-meta{font-size:9px;color:#83a2ba;margin-bottom:3px}.news-row-meta b{color:#ff8d99}.news-row-meta i{color:#ffd27d;font-style:normal}
+.connector-panel{margin-top:13px}.connector-plan{display:flex;gap:7px;flex-wrap:wrap}
+.event-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.event-card{display:flex;gap:14px;background:linear-gradient(155deg,#142740,#0d1d30);border:1px solid var(--line);border-radius:17px;padding:16px}
+.event-date{width:100px;flex:none;padding:10px;border:1px solid #33536c;border-radius:12px;background:#0d2033;text-align:center}
+.event-date b,.event-date span{display:block}.event-date b{font-size:12px}.event-date span{font-size:13px;color:#8edcff;margin-top:4px}
+.event-type{font-size:9px;color:#8bb5ce;text-transform:uppercase;letter-spacing:.08em}.event-card h3{font-size:15px;margin:3px 0}.event-card p{margin:2px 0;color:#a9c2d4;font-size:12px}
+.deal-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-bottom:13px}
+.deal-card{position:relative;background:linear-gradient(155deg,#142740,#0d1d30);border:1px solid var(--line);border-radius:17px;padding:16px;min-height:180px}
+.deal-card.hot{border-color:#a84651;box-shadow:0 0 0 1px rgba(218,72,87,.08) inset}.hotdeal{display:inline-block;background:#47191f;color:#ff98a3;border:1px solid #a84651;border-radius:999px;padding:3px 7px;font-size:9px;font-weight:900;margin-bottom:8px}
+.deal-provider{font-size:10px;color:#86b4ce;text-transform:uppercase;letter-spacing:.08em}.deal-card h3{margin:5px 0 9px;line-height:1.4}.deal-card p{font-size:11px;color:var(--muted)}
+.deal-discount{font-size:26px;font-weight:900;color:#ff939e}.deal-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}.deal-actions a{font-size:11px;color:#8edcff;font-weight:800}.deal-actions .secondary{color:#9fb3c5}
+@media(max-width:930px){.news-columns,.event-grid{grid-template-columns:1fr}.deal-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.macro-row{grid-template-columns:1fr 82px 70px}.macro-row>:nth-child(4){display:none}.deal-grid{grid-template-columns:1fr}.event-card{align-items:flex-start}.event-date{width:88px}.topactions{gap:6px}.iconbtn{padding:8px 9px;font-size:11px}}
