@@ -3,6 +3,7 @@ import json, re, os, html as htmlmod, urllib.parse, urllib.request, xml.etree.El
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 from zoneinfo import ZoneInfo
+from concurrent.futures import ThreadPoolExecutor
 
 UA={"User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124 Safari/537.36"}
 GEMINI_API_KEY=os.environ.get("GEMINI_API_KEY","")
@@ -158,6 +159,18 @@ def fallback_image(category):
       "travel":"https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1000&q=70",
     }.get(category,"https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=1000&q=70")
 
+def enrich_item_image(item, category, url_key="url"):
+    if item.get("imageUrl"):return item
+    url=item.get(url_key) or item.get("bookingUrl") or item.get("url")
+    item["imageUrl"]=fetch_og_image(url,6) or fallback_image(category)
+    return item
+
+def enrich_images_parallel(items, category, max_workers=8):
+    if not items:return items
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        list(ex.map(lambda x: enrich_item_image(x,category),items))
+    return items
+
 def gemini_refine(items):
     if not GEMINI_API_KEY or not items:return items
     slim=[{"id":i,"title":x.get("title",""),"summary":x.get("summary","")} for i,x in enumerate(items)]
@@ -239,11 +252,11 @@ def collect_news():
                 x["category"]=cat
                 x["sentiment"]=headline_sentiment(x["title"],x.get("summary",""))
                 x["summaryShort"]=short_summary(x["title"],x.get("summary",""))
-                if not x.get("imageUrl"):
-                    x["imageUrl"]=fetch_og_image(x.get("url")) or fallback_image(cat)
                 arr.append(x)
         arr.sort(key=lambda x:(x.get("breaking",False),x.get("vip",False),x.get("publishedAt") or ""),reverse=True)
-        buckets[cat]=arr[:10]
+        visible=arr[:10]
+        enrich_images_parallel(visible,cat,8)
+        buckets[cat]=visible
     pool=[x for v in buckets.values() for x in v]
     unique=[];seen_ids=set()
     for x in pool:
@@ -312,9 +325,8 @@ def life_events():
     today=datetime.now(BKK).date();out=[]
     for raw in LIFE_EVENTS:
         if datetime.fromisoformat(raw["date"]).date()<today:continue
-        x=dict(raw)
-        x["imageUrl"]=fetch_og_image(x.get("url")) or fallback_image("concert")
-        out.append(x)
+        x=dict(raw);x["imageUrl"]=None;out.append(x)
+    enrich_images_parallel(out,"concert",6)
     return out
 
 def travel_promos():
@@ -337,10 +349,10 @@ def travel_promos():
     for x in arr:
         key=(x.get("provider"),re.sub(r"\W+","",x.get("title","").lower())[:80])
         if key in seen:continue
-        seen.add(key)
-        x["imageUrl"]=fetch_og_image(x.get("bookingUrl") or x.get("url")) or fallback_image("travel")
-        out.append(x)
-    return out[:18]
+        seen.add(key);x["imageUrl"]=None;out.append(x)
+    selected=out[:18]
+    enrich_images_parallel(selected,"travel",8)
+    return selected
 
 def main():
     data={
