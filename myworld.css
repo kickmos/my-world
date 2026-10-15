@@ -44,3 +44,28 @@ button,input{font:inherit}button{cursor:pointer}button:focus-visible,a:focus-vis
 .deal-discount{font-size:26px;font-weight:900;color:#ff939e}.deal-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}.deal-actions a{font-size:11px;color:#8edcff;font-weight:800}.deal-actions .secondary{color:#9fb3c5}
 @media(max-width:930px){.news-columns,.event-grid{grid-template-columns:1fr}.deal-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.macro-row{grid-template-columns:1fr 82px 70px}.macro-row>:nth-child(4){display:none}.deal-grid{grid-template-columns:1fr}.event-card{align-items:flex-start}.event-date{width:88px}.topactions{gap:6px}.iconbtn{padding:8px 9px;font-size:11px}}
+
+.news-title-row,.news-title-line{display:flex;gap:7px;align-items:flex-start}
+.sentiment{display:inline-flex;align-items:center;justify-content:center;flex:none;font-size:15px;line-height:1}
+.sentiment.positive{filter:drop-shadow(0 0 5px rgba(55,200,120,.25))}
+.sentiment.negative{filter:drop-shadow(0 0 5px rgba(240,70,80,.25))}
+.news-summary{margin-top:6px!important;color:#a9bed0!important;font-size:11px!important;line-height:1.5!important}
+.feedthumb{width:100%;max-height:210px;object-fit:cover;border-radius:12px;margin:10px 0 2px;border:1px solid rgba(49,84,111,.55);background:#0a1725}
+.news-row{display:flex;gap:10px}
+.news-row-img{width:92px;height:72px;object-fit:cover;border-radius:10px;flex:none;border:1px solid rgba(49,84,111,.55);background:#0a1725}
+.news-row-body{min-width:0;flex:1}
+.news-row-body .news-summary{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.visual-card{display:block;overflow:hidden;padding:0}
+.event-hero{width:100%;height:190px;display:block;object-fit:cover;background:#0c1928}
+.event-content{display:flex;gap:14px;padding:14px}
+.visual-deal{overflow:hidden;padding:0}
+.deal-hero{width:100%;height:165px;display:block;object-fit:cover;background:#0c1928}
+.deal-body{padding:15px}
+@media(max-width:650px){
+  .feedthumb{max-height:170px}
+  .news-row-img{width:80px;height:68px}
+  .event-hero{height:170px}
+  .event-content{gap:10px;padding:12px}
+  .event-date{width:82px}
+  .deal-hero{height:155px}
+}
