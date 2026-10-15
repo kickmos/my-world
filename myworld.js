@@ -34,7 +34,13 @@ function drawFeed(){
       card.append(make("div","rank",String(i+1).padStart(2,"0")));
       const body=make("div","grow");
       const meta=[n.category?.toUpperCase(),n.source,n.publishedAt?new Date(n.publishedAt).toLocaleString("th-TH",{timeZone:"Asia/Bangkok",dateStyle:"short",timeStyle:"short"}):""].filter(Boolean).join(" · ");
-      body.append(make("div","feedmeta",(n.breaking?"BREAKING · ":"")+(n.vip?"VIP · ":"")+meta),make("h3","",n.title),make("p","",n.summary||""));
+      const sentiment=n.sentiment==="positive"?"👍":n.sentiment==="negative"?"👎":"";
+      const titleRow=make("div","news-title-row");
+      if(sentiment){const s=make("span","sentiment "+n.sentiment,sentiment);titleRow.append(s)}
+      titleRow.append(make("h3","",n.title));
+      body.append(make("div","feedmeta",(n.breaking?"BREAKING · ":"")+(n.vip?"VIP · ":"")+meta),titleRow);
+      if(n.imageUrl){const img=document.createElement("img");img.className="feedthumb";img.src=n.imageUrl;img.alt="";img.loading="lazy";body.append(img)}
+      body.append(make("p","news-summary",n.summaryShort||n.summary||""));
       const a=make("a","cardlink","อ่านต้นทาง →");a.href=n.url;a.target="_blank";a.rel="noopener noreferrer";body.append(a);
       card.append(body);list.append(card);
     }
@@ -67,19 +73,19 @@ function renderDiscover(){
   const box=document.getElementById("discoverNews"); if(!box)return;
   const data=window.DASHBOARD_DATA?.news||{};
   const cats=[["markets","Markets / Crypto"],["politics","Politics"],["world","World / Geopolitics"],["tech_ai","Tech / AI"]];
-  box.innerHTML=cats.map(([key,label])=>`<section class="news-col"><h2>${label}</h2>${(data[key]||[]).slice(0,6).map(n=>`<a class="news-row" href="${n.url}" target="_blank" rel="noopener"><div class="news-row-meta">${n.breaking?'<b>BREAKING</b> ':''}${n.vip?'<i>VIP</i> ':''}${n.source||""}</div><strong>${n.title}</strong><span>${n.publishedAt?fmtBangkok(n.publishedAt):""}</span></a>`).join("")||'<div class="status">No recent items</div>'}</section>`).join("");
+  box.innerHTML=cats.map(([key,label])=>`<section class="news-col"><h2>${label}</h2>${(data[key]||[]).slice(0,6).map(n=>`<a class="news-row" href="${n.url}" target="_blank" rel="noopener">${n.imageUrl?'<img class="news-row-img" src="'+n.imageUrl+'" alt="" loading="lazy">':""}<div class="news-row-body"><div class="news-row-meta">${n.breaking?'<b>BREAKING</b> ':''}${n.vip?'<i>VIP</i> ':''}${n.source||""}</div><div class="news-title-line">${n.sentiment==="positive"?'<span class="sentiment positive">👍</span>':n.sentiment==="negative"?'<span class="sentiment negative">👎</span>':""}<strong>${n.title}</strong></div><p class="news-summary">${n.summaryShort||n.summary||""}</p><span>${n.publishedAt?fmtBangkok(n.publishedAt):""}</span></div></a>`).join("")||'<div class="status">No recent items</div>'}</section>`).join("");
   const u=document.getElementById("discoverUpdated");if(u&&window.DASHBOARD_DATA?.updated)u.textContent="Updated "+fmtBangkok(window.DASHBOARD_DATA.updated);
   const cp=document.getElementById("connectorPlan");if(cp)cp.innerHTML='<span class="chip">X / posts</span><span class="chip">Reddit</span><span class="chip">YouTube</span><span class="chip">Google Trends</span>';
 }
 function renderLife(){
   const box=document.getElementById("lifeEventList");if(!box)return;
   const rows=window.DASHBOARD_DATA?.lifeEvents||[];
-  box.innerHTML=rows.map(e=>`<article class="event-card"><div class="event-date"><b>${e.date}</b><span>${e.time}</span></div><div class="grow"><div class="event-type">${e.type}</div><h3>${e.title}</h3><p>${e.venue}</p><a class="cardlink" href="${e.url}" target="_blank" rel="noopener">จอง/ดูรายละเอียดกับ ${e.booking} →</a></div></article>`).join("")||'<div class="status">ยังไม่มี event ที่ยืนยัน</div>';
+  box.innerHTML=rows.map(e=>`<article class="event-card visual-card">${e.imageUrl?'<img class="event-hero" src="'+e.imageUrl+'" alt="" loading="lazy">':""}<div class="event-content"><div class="event-date"><b>${e.date}</b><span>${e.time}</span></div><div class="grow"><div class="event-type">${e.type}</div><h3>${e.title}</h3><p>${e.venue}</p><a class="cardlink" href="${e.url}" target="_blank" rel="noopener">จอง/ดูรายละเอียดกับ ${e.booking} →</a></div></div></article>`).join("")||'<div class="status">ยังไม่มี event ที่ยืนยัน</div>';
 }
 function renderTravel(){
   const box=document.getElementById("travelPromoList");if(!box)return;
   const rows=window.DASHBOARD_DATA?.travelPromos||[];
-  box.innerHTML=rows.map(p=>`<article class="deal-card ${p.hot?"hot":""}">${p.hot?'<span class="hotdeal">HOT DEAL ≥50%</span>':""}<div class="deal-provider">${p.provider||p.source||""}</div><h3>${p.title}</h3>${p.discountPct?'<div class="deal-discount">-'+p.discountPct+'%</div>':""}<p>${p.publishedAt?"พบเมื่อ "+fmtBangkok(p.publishedAt):"ตรวจสอบ availability และราคาสุทธิที่หน้า provider"}</p><div class="deal-actions"><a href="${p.bookingUrl||p.url}" target="_blank" rel="noopener">ไปจอง/ดูโปร →</a>${p.url&&p.url!==p.bookingUrl?'<a class="secondary" href="'+p.url+'" target="_blank" rel="noopener">แหล่งที่พบ</a>':""}</div></article>`).join("")||'<div class="status">ยังไม่พบโปรล่าสุด</div>';
+  box.innerHTML=rows.map(p=>`<article class="deal-card ${p.hot?"hot":""} visual-deal">${p.imageUrl?'<img class="deal-hero" src="'+p.imageUrl+'" alt="" loading="lazy">':""}<div class="deal-body">${p.hot?'<span class="hotdeal">HOT DEAL ≥50%</span>':""}<div class="deal-provider">${p.provider||p.source||""}</div><h3>${p.title}</h3>${p.discountPct?'<div class="deal-discount">-'+p.discountPct+'%</div>':""}<p>${p.publishedAt?"พบเมื่อ "+fmtBangkok(p.publishedAt):"ตรวจสอบ availability และราคาสุทธิที่หน้า provider"}</p><div class="deal-actions"><a href="${p.bookingUrl||p.url}" target="_blank" rel="noopener">ไปจอง/ดูโปร →</a>${p.url&&p.url!==p.bookingUrl?'<a class="secondary" href="'+p.url+'" target="_blank" rel="noopener">แหล่งที่พบ</a>':""}</div></div></article>`).join("")||'<div class="status">ยังไม่พบโปรล่าสุด</div>';
 }
 function renderLiveDashboard(){renderMacro();renderDiscover();renderLife();renderTravel();}
 renderLiveDashboard();
