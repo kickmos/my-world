@@ -413,13 +413,15 @@ def normalize_event_date(text):
 
 def fetch_nasdaq_earnings(days=21):
     today=datetime.now(BKK).date();out=[]
-    for offset in range(days):
-        d=today+timedelta(days=offset)
+    dates=[today+timedelta(days=i) for i in range(days)]
+    def one(d):
         try:
-            data=nasdaq_json("/api/calendar/earnings?date="+d.isoformat(),12)
-            rows=((data.get("data") or {}).get("rows") or [])
-        except Exception:
-            rows=[]
+            data=nasdaq_json("/api/calendar/earnings?date="+d.isoformat(),7)
+            return d,((data.get("data") or {}).get("rows") or [])
+        except Exception:return d,[]
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        results=list(ex.map(one,dates))
+    for d,rows in results:
         for row in rows:
             symbol=clean(row.get("symbol") or "")
             name=clean(row.get("name") or row.get("companyName") or "")
@@ -429,40 +431,28 @@ def fetch_nasdaq_earnings(days=21):
             fiscal=clean(row.get("fiscalQuarterEnding") or "")
             cap=clean(row.get("marketCap") or "")
             status="confirmed" if time_label and "not" not in time_label.lower() and "unsupplied" not in time_label.lower() else "estimated"
-            out.append({
-              "symbol":symbol,"company":name,"eventType":"EARNINGS","eventLabel":EVENT_TYPE_LABELS["EARNINGS"],
-              "date":d.isoformat(),"status":status,"timeMarket":time_label or "TBA",
-              "risk":"MEDIUM","source":"Nasdaq Earnings Calendar",
-              "url":"https://www.nasdaq.com/market-activity/earnings",
-              "detail":("EPS forecast "+eps if eps else "Earnings release")+((" · "+fiscal) if fiscal else ""),
-              "marketCap":cap,"marketCapValue":parse_market_cap(cap),
-              "discovery":True,
-            })
+            out.append({"symbol":symbol,"company":name,"eventType":"EARNINGS","eventLabel":EVENT_TYPE_LABELS["EARNINGS"],"date":d.isoformat(),"status":status,"timeMarket":time_label or "TBA","risk":"MEDIUM","source":"Nasdaq Earnings Calendar","url":"https://www.nasdaq.com/market-activity/earnings","detail":("EPS forecast "+eps if eps else "Earnings release")+((" · "+fiscal) if fiscal else ""),"marketCap":cap,"marketCapValue":parse_market_cap(cap),"discovery":True})
     return out
 
 def fetch_nasdaq_dividends(days=35):
     today=datetime.now(BKK).date();out=[]
-    for offset in range(days):
-        d=today+timedelta(days=offset)
+    dates=[today+timedelta(days=i) for i in range(days)]
+    def one(d):
         try:
-            data=nasdaq_json("/api/calendar/dividends?date="+d.isoformat(),12)
+            data=nasdaq_json("/api/calendar/dividends?date="+d.isoformat(),7)
             rows=((data.get("data") or {}).get("calendar") or {}).get("rows") or ((data.get("data") or {}).get("rows") or [])
-        except Exception:
-            rows=[]
+            return d,rows
+        except Exception:return d,[]
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        results=list(ex.map(one,dates))
+    for d,rows in results:
         for row in rows:
             symbol=clean(row.get("symbol") or "")
             name=clean(row.get("companyName") or row.get("name") or "")
             exdate=normalize_event_date(row.get("dividend_Ex_Date") or row.get("exOrEffDate") or row.get("exDate")) or d.isoformat()
             if not symbol:continue
             amount=clean(row.get("amount") or row.get("cashAmount") or "")
-            out.append({
-              "symbol":symbol,"company":name or symbol,"eventType":"XD","eventLabel":EVENT_TYPE_LABELS["XD"],
-              "date":exdate,"status":"confirmed","timeMarket":"Market date",
-              "risk":"LOW","source":"Nasdaq Dividend Calendar",
-              "url":"https://www.nasdaq.com/market-activity/dividends",
-              "detail":("Dividend "+amount if amount else "Ex-dividend date"),
-              "marketCap":"","marketCapValue":0,"discovery":True,
-            })
+            out.append({"symbol":symbol,"company":name or symbol,"eventType":"XD","eventLabel":EVENT_TYPE_LABELS["XD"],"date":exdate,"status":"confirmed","timeMarket":"Market date","risk":"LOW","source":"Nasdaq Dividend Calendar","url":"https://www.nasdaq.com/market-activity/dividends","detail":("Dividend "+amount if amount else "Ex-dividend date"),"marketCap":"","marketCapValue":0,"discovery":True})
     return out
 
 def infer_ticker(title):
