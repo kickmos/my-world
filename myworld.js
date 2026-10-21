@@ -2,12 +2,13 @@
 const widgets=[
 {id:"flow",icon:"◎",name:"Global Capital Flow",desc:"ระบบติดตามเส้นทางเงินทุนโลก พร้อมแผนภาพการเคลื่อนย้ายระหว่าง USD, หุ้น, พันธบัตร, Gold และ Crypto",tags:["Liquidity","Route Probability"],url:"./capital-flow.html",label:"เปิด Capital Flow"},
 {id:"watchlist",icon:"▥",name:"My Watchlist",desc:"ติดตามหุ้นและสินทรัพย์ที่สนใจ เช่น NVDA, TSM, AVGO, MRVL, ORCL, AMZN, BTC และ XAUUSD โดยไม่แสดงราคาหากยังไม่มีข้อมูลอัปเดต",tags:["Equity","Crypto","Gold"],url:"./notifications.html",label:"ดู Watchlist"},
-{id:"calendar",icon:"▦",name:"Economic & Market Calendar",desc:"พื้นที่สำหรับ CPI, PPI, PCE, FOMC, Earnings รวมถึงวันหยุดตลาดหุ้นและ Bank Holidays; อยู่ระหว่างวางระบบปฏิทินจริง",tags:["Economic Events","Market Holidays"],url:"#finance",label:"ไปที่ Finance"},
+{id:"calendar",icon:"▦",name:"Economic & Market Calendar",desc:"พื้นที่สำหรับ CPI, PPI, PCE, FOMC รวมถึงวันหยุดตลาดหุ้นและ Bank Holidays",tags:["Economic Events","Market Holidays"],url:"#finance",label:"ไปที่ Finance"},
+{id:"corporate",icon:"◫",name:"Earnings & Corporate Actions",desc:"ติดตาม Earnings, XD, Offering, Dilution, Warrant, Split และเพิ่มทุน พร้อม Discovery หุ้นเด่นนอก Watchlist",tags:["Earnings","Dilution","Corporate Actions"],url:"#corporate",label:"เปิด Corporate Events"},
 {id:"alerts",icon:"♧",name:"Alerts & Monitoring",desc:"รายการ ChatGPT Automation ที่ตรวจสอบไว้และ Watchlist ใหม่ แยกสถานะทำงานจริงกับรายการที่ยังไม่ได้ตั้งแจ้งเตือน",tags:["Monitoring","Snapshot"],url:"./notifications.html",label:"เปิด Alerts Center"},
 {id:"travel",icon:"✈",name:"Travel Price Watch",desc:"พื้นที่วางแผนบินและโรงแรม พร้อมงบรวมและลิงก์ผู้ให้บริการเมื่อได้รับข้อมูลที่ตรวจสอบได้จริง",tags:["Flights","Hotels"],url:"#travel",label:"ไปที่ Travel"},
 {id:"world",icon:"◈",name:"World News & Trends",desc:"ข่าวเศรษฐกิจ การเมือง ความขัดแย้งและเทรนด์ Social — อยู่ระหว่างเตรียมแหล่งข่าวและระบบจัดอันดับ",tags:["World","Social"],url:"#discover",label:"ไปที่ Discover"}
 ];
-const defaultOrder=["flow","watchlist","calendar","alerts","travel","world"];
+const defaultOrder=["flow","watchlist","calendar","corporate","alerts","travel","world"];
 const key="myworld.v2.dashboard.layout";let layout=readLayout();let editing=false;let mode="dashboard";
 function readLayout(){try{const d=JSON.parse(localStorage.getItem(key));if(d&&Array.isArray(d.order))return {order:[...new Set([...d.order.filter(x=>defaultOrder.includes(x)),...defaultOrder])],hidden:Array.isArray(d.hidden)?d.hidden.filter(x=>defaultOrder.includes(x)):[],large:Array.isArray(d.large)?d.large.filter(x=>defaultOrder.includes(x)):["flow"]}}catch{}return {order:[...defaultOrder],hidden:["travel","world"],large:["flow"]}}
 function save(){try{localStorage.setItem(key,JSON.stringify(layout))}catch{}}
@@ -54,7 +55,7 @@ function drawFeed(){
 }
 function setMode(next){mode=next;document.getElementById("dashboardView").classList.toggle("hidden",next!=="dashboard");document.getElementById("feedView").classList.toggle("hidden",next!=="feed");document.getElementById("dashboardToggle").classList.toggle("active",next==="dashboard");document.getElementById("feedToggle").classList.toggle("active",next==="feed");}
 document.getElementById("dashboardToggle").onclick=()=>setMode("dashboard");document.getElementById("feedToggle").onclick=()=>setMode("feed");
-const pages=["home","finance","discover","travel","life","alerts"];function route(){let current=location.hash.replace("#","")||"home";if(!pages.includes(current))current="home";for(const p of pages)document.getElementById("page-"+p).classList.toggle("hidden",current!==p);document.querySelectorAll("[data-route]").forEach(el=>{el.classList.toggle("active",el.dataset.route===current);if(el.dataset.route===current)el.setAttribute("aria-current","page");else el.removeAttribute("aria-current")});window.scrollTo(0,0)}
+const pages=["home","finance","corporate","discover","travel","life","alerts"];function route(){let current=location.hash.replace("#","")||"home";if(!pages.includes(current))current="home";for(const p of pages)document.getElementById("page-"+p).classList.toggle("hidden",current!==p);document.querySelectorAll("[data-route]").forEach(el=>{el.classList.toggle("active",el.dataset.route===current);if(el.dataset.route===current)el.setAttribute("aria-current","page");else el.removeAttribute("aria-current")});window.scrollTo(0,0)}
 window.addEventListener("hashchange",route);document.getElementById("resetLayout").onclick=()=>{layout={order:[...defaultOrder],hidden:["travel","world"],large:["flow"]};save();drawWidgets()};drawWidgets();drawFeed();route();
 
 
@@ -87,5 +88,43 @@ function renderTravel(){
   const rows=window.DASHBOARD_DATA?.travelPromos||[];
   box.innerHTML=rows.map(p=>`<article class="deal-card ${p.hot?"hot":""} visual-deal">${p.imageUrl?'<img class="deal-hero" src="'+p.imageUrl+'" alt="" loading="lazy">':""}<div class="deal-body">${p.hot?'<span class="hotdeal">HOT DEAL ≥50%</span>':""}<div class="deal-provider">${p.provider||p.source||""}</div><h3>${p.title}</h3>${p.discountPct?'<div class="deal-discount">-'+p.discountPct+'%</div>':""}<p>${p.publishedAt?"พบเมื่อ "+fmtBangkok(p.publishedAt):"ตรวจสอบ availability และราคาสุทธิที่หน้า provider"}</p><div class="deal-actions"><a href="${p.bookingUrl||p.url}" target="_blank" rel="noopener">ไปจอง/ดูโปร →</a>${p.url&&p.url!==p.bookingUrl?'<a class="secondary" href="'+p.url+'" target="_blank" rel="noopener">แหล่งที่พบ</a>':""}</div></div></article>`).join("")||'<div class="status">ยังไม่พบโปรล่าสุด</div>';
 }
-function renderLiveDashboard(){renderMacro();renderDiscover();renderLife();renderTravel();}
+
+let corporateFilter="all";
+function corpGroupMatch(e,filter){
+  if(filter==="all")return true;
+  if(filter==="earnings")return e.eventType==="EARNINGS";
+  if(filter==="xd")return e.eventType==="XD";
+  if(filter==="risk")return ["OFFERING","DILUTION","CAPITAL RAISE"].includes(e.eventType);
+  if(filter==="warrant")return ["WARRANT","SPLIT"].includes(e.eventType);
+  return true;
+}
+function renderCorporate(){
+  const box=document.getElementById("corporateEventList");if(!box)return;
+  const all=window.DASHBOARD_DATA?.corporateEvents||[];
+  const rows=all.filter(e=>corpGroupMatch(e,corporateFilter));
+  box.innerHTML=rows.length?rows.map(e=>{
+    const high=e.risk==="HIGH";
+    const status=(e.status||"estimated").toLowerCase();
+    const watch=(e.attentionScore||0)>=80;
+    const riskClass=high?" high":e.risk==="MEDIUM"?" medium":"";
+    return `<article class="corp-card${riskClass}">
+      <div class="corp-date"><b>${e.date||"TBA"}</b><span>${e.timeMarket||"TBA"}</span><em class="date-status ${status}">${e.dateStatusLabel||status.toUpperCase()}</em></div>
+      <div class="corp-main">
+        <div class="corp-topline"><span class="corp-symbol">${e.symbol||"—"}</span><span class="corp-type ${(e.eventType||"other").toLowerCase().replace(/\s+/g,"-")}">${e.eventLabel||e.eventType||"Corporate Action"}</span>${watch?'<span class="watch-badge">WATCH</span>':""}${high?'<span class="risk-badge">HIGH RISK</span>':""}</div>
+        <h3>${e.company||e.symbol||"Corporate event"}</h3>
+        <p>${e.detail||""}</p>
+        <div class="corp-meta"><span>Attention ${Math.round(e.attentionScore||0)}/100</span><span>${e.source||""}</span>${e.marketCap?'<span>Market cap '+e.marketCap+'</span>':""}</div>
+        ${e.url?'<a class="cardlink" href="'+e.url+'" target="_blank" rel="noopener noreferrer">ตรวจสอบแหล่งข้อมูล →</a>':""}
+      </div>
+    </article>`;
+  }).join(""):'<div class="status">ยังไม่พบ corporate events ใน filter นี้</div>';
+  const u=document.getElementById("corporateUpdated");
+  if(u&&window.DASHBOARD_DATA?.updated)u.textContent="Updated "+fmtBangkok(window.DASHBOARD_DATA.updated)+" · "+all.length+" events";
+}
+document.querySelectorAll("[data-corp-filter]").forEach(btn=>btn.addEventListener("click",()=>{
+  corporateFilter=btn.dataset.corpFilter||"all";
+  document.querySelectorAll("[data-corp-filter]").forEach(x=>x.classList.toggle("active",x===btn));
+  renderCorporate();
+}));
+function renderLiveDashboard(){renderMacro();renderCorporate();renderDiscover();renderLife();renderTravel();}
 renderLiveDashboard();
