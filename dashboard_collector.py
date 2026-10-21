@@ -87,6 +87,26 @@ FOMC_END_DATES=[
  "2027-07-28","2027-09-15","2027-10-27","2027-12-08"
 ]
 
+
+CORPORATE_EVENT_QUERIES=[
+ {"query":"(stock offering OR secondary offering OR public offering OR registered direct offering) when:3d","type":"OFFERING","risk":"HIGH"},
+ {"query":"(stock dilution OR dilutive offering OR ATM offering OR shelf registration) when:3d","type":"DILUTION","risk":"HIGH"},
+ {"query":"(warrant exercise OR warrants issued OR warrant agreement) stock when:5d","type":"WARRANT","risk":"HIGH"},
+ {"query":"(reverse stock split OR stock split) when:5d","type":"SPLIT","risk":"MEDIUM"},
+ {"query":"(capital raise OR raises capital OR share issuance OR new shares) company when:3d","type":"CAPITAL RAISE","risk":"HIGH"},
+]
+
+EVENT_TYPE_LABELS={
+ "EARNINGS":"ผลประกอบการ",
+ "XD":"ขึ้น XD / Ex-Dividend",
+ "OFFERING":"เสนอขายหุ้น / Offering",
+ "DILUTION":"Dilution / ATM / Shelf",
+ "WARRANT":"Warrant",
+ "SPLIT":"Split / Reverse Split",
+ "CAPITAL RAISE":"เพิ่มทุน / ออกหุ้นใหม่",
+ "OTHER":"Corporate Action",
+}
+
 def get_bytes(url,timeout=15):
     req=urllib.request.Request(url,headers=UA)
     with urllib.request.urlopen(req,timeout=timeout) as r:return r.read()
@@ -362,6 +382,154 @@ def travel_promos():
     enrich_images_parallel(selected,"travel",8)
     return selected
 
+
+def nasdaq_json(path, timeout=15):
+    url="https://api.nasdaq.com"+path
+    headers={
+      **UA,
+      "Accept":"application/json, text/plain, */*",
+      "Accept-Language":"en-US,en;q=0.9",
+      "Origin":"https://www.nasdaq.com",
+      "Referer":"https://www.nasdaq.com/",
+    }
+    req=urllib.request.Request(url,headers=headers)
+    with urllib.request.urlopen(req,timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+def parse_market_cap(text):
+    if text in (None,"","N/A"):return 0
+    s=str(text).replace("$","").replace(",","").strip().upper()
+    m=re.match(r"([0-9.]+)\s*([KMBT]?)",s)
+    if not m:return 0
+    n=float(m.group(1));mult={"":1,"K":1e3,"M":1e6,"B":1e9,"T":1e12}.get(m.group(2),1)
+    return n*mult
+
+def normalize_event_date(text):
+    if not text:return None
+    for fmt in ("%m/%d/%Y","%Y-%m-%d","%b %d, %Y","%B %d, %Y"):
+        try:return datetime.strptime(str(text).strip(),fmt).date().isoformat()
+        except Exception:pass
+    return None
+
+def fetch_nasdaq_earnings(days=21):
+    today=datetime.now(BKK).date();out=[]
+    for offset in range(days):
+        d=today+timedelta(days=offset)
+        try:
+            data=nasdaq_json("/api/calendar/earnings?date="+d.isoformat(),12)
+            rows=((data.get("data") or {}).get("rows") or [])
+        except Exception:
+            rows=[]
+        for row in rows:
+            symbol=clean(row.get("symbol") or "")
+            name=clean(row.get("name") or row.get("companyName") or "")
+            if not symbol or not name:continue
+            time_label=clean(row.get("time") or row.get("timeOfDay") or "")
+            eps=clean(row.get("epsForecast") or "")
+            fiscal=clean(row.get("fiscalQuarterEnding") or "")
+            cap=clean(row.get("marketCap") or "")
+            status="confirmed" if time_label and "not" not in time_label.lower() and "unsupplied" not in time_label.lower() else "estimated"
+            out.append({
+              "symbol":symbol,"company":name,"eventType":"EARNINGS","eventLabel":EVENT_TYPE_LABELS["EARNINGS"],
+              "date":d.isoformat(),"status":status,"timeMarket":time_label or "TBA",
+              "risk":"MEDIUM","source":"Nasdaq Earnings Calendar",
+              "url":"https://www.nasdaq.com/market-activity/earnings",
+              "detail":("EPS forecast "+eps if eps else "Earnings release")+((" · "+fiscal) if fiscal else ""),
+              "marketCap":cap,"marketCapValue":parse_market_cap(cap),
+              "discovery":True,
+            })
+    return out
+
+def fetch_nasdaq_dividends(days=35):
+    today=datetime.now(BKK).date();out=[]
+    for offset in range(days):
+        d=today+timedelta(days=offset)
+        try:
+            data=nasdaq_json("/api/calendar/dividends?date="+d.isoformat(),12)
+            rows=((data.get("data") or {}).get("calendar") or {}).get("rows") or ((data.get("data") or {}).get("rows") or [])
+        except Exception:
+            rows=[]
+        for row in rows:
+            symbol=clean(row.get("symbol") or "")
+            name=clean(row.get("companyName") or row.get("name") or "")
+            exdate=normalize_event_date(row.get("dividend_Ex_Date") or row.get("exOrEffDate") or row.get("exDate")) or d.isoformat()
+            if not symbol:continue
+            amount=clean(row.get("amount") or row.get("cashAmount") or "")
+            out.append({
+              "symbol":symbol,"company":name or symbol,"eventType":"XD","eventLabel":EVENT_TYPE_LABELS["XD"],
+              "date":exdate,"status":"confirmed","timeMarket":"Market date",
+              "risk":"LOW","source":"Nasdaq Dividend Calendar",
+              "url":"https://www.nasdaq.com/market-activity/dividends",
+              "detail":("Dividend "+amount if amount else "Ex-dividend date"),
+              "marketCap":"","marketCapValue":0,"discovery":True,
+            })
+    return out
+
+def infer_ticker(title):
+    patterns=[
+      r"\$([A-Z]{1,5})(?:\b|$)",
+      r"\((?:NASDAQ|NYSE|AMEX|OTC)[:\s]+([A-Z]{1,5})\)",
+      r"\bNASDAQ[:\s]+([A-Z]{1,5})\b",
+      r"\bNYSE[:\s]+([A-Z]{1,5})\b",
+    ]
+    for p in patterns:
+        m=re.search(p,title or "")
+        if m:return m.group(1)
+    return ""
+
+def collect_corporate_action_news():
+    out=[];seen=set()
+    for spec in CORPORATE_EVENT_QUERIES:
+        for x in google_news(spec["query"],"Corporate Action",10):
+            title=x.get("title","");key=re.sub(r"\W+","",title.lower())[:120]
+            if key in seen:continue
+            seen.add(key)
+            symbol=infer_ticker(title)
+            dt=parse_date(x.get("publishedAt"))
+            event_date=(dt.astimezone(BKK).date().isoformat() if dt else datetime.now(BKK).date().isoformat())
+            lower=(title+" "+x.get("summary","")).lower()
+            event_type=spec["type"]
+            if "warrant" in lower:event_type="WARRANT"
+            elif "reverse split" in lower or "stock split" in lower:event_type="SPLIT"
+            elif "atm offering" in lower or "shelf registration" in lower or "dilut" in lower:event_type="DILUTION"
+            elif "offering" in lower:event_type="OFFERING"
+            elif "capital raise" in lower or "share issuance" in lower or "new shares" in lower:event_type="CAPITAL RAISE"
+            out.append({
+              "symbol":symbol or "—","company":title,"eventType":event_type,"eventLabel":EVENT_TYPE_LABELS.get(event_type,event_type),
+              "date":event_date,"status":"confirmed","timeMarket":"News / filing signal",
+              "risk":"HIGH" if event_type in ("OFFERING","DILUTION","WARRANT","CAPITAL RAISE") else spec["risk"],
+              "source":x.get("source") or "News signal","url":x.get("url"),"detail":short_summary(title,x.get("summary","")),
+              "marketCap":"","marketCapValue":0,"discovery":True,"publishedAt":x.get("publishedAt")
+            })
+    return out
+
+def corporate_events():
+    events=[]
+    events.extend(fetch_nasdaq_earnings(18))
+    events.extend(fetch_nasdaq_dividends(24))
+    events.extend(collect_corporate_action_news())
+
+    # Discovery ranking: imminent events, large companies, and high-risk corporate actions rise to the top.
+    today=datetime.now(BKK).date()
+    risk_score={"HIGH":80,"MEDIUM":45,"LOW":15}
+    for e in events:
+        try:days=(datetime.fromisoformat(e["date"]).date()-today).days
+        except Exception:days=99
+        proximity=max(0,40-min(abs(days),20)*2)
+        cap=e.get("marketCapValue",0) or 0
+        cap_score=35 if cap>=2e11 else 28 if cap>=5e10 else 20 if cap>=1e10 else 8 if cap>=1e9 else 0
+        confirmed=12 if e.get("status")=="confirmed" else 4
+        e["attentionScore"]=min(100,risk_score.get(e.get("risk"),20)+proximity+cap_score+confirmed)
+        e["dateStatusLabel"]="CONFIRMED" if e.get("status")=="confirmed" else "ESTIMATED"
+
+    # Avoid overwhelming the dashboard with routine dividends; keep high-profile XD names only.
+    earnings=sorted([e for e in events if e["eventType"]=="EARNINGS"],key=lambda x:(x["date"],-x["attentionScore"]))[:55]
+    actions=sorted([e for e in events if e["eventType"] not in ("EARNINGS","XD")],key=lambda x:(-x["attentionScore"],x["date"]))[:30]
+    dividends=sorted([e for e in events if e["eventType"]=="XD"],key=lambda x:(-x.get("marketCapValue",0),x["date"]))[:15]
+    merged=earnings+actions+dividends
+    merged.sort(key=lambda x:(x["date"],-x["attentionScore"]))
+    return merged[:80]
+
 def main():
     data={
       "updated":datetime.now(timezone.utc).isoformat(),
@@ -369,16 +537,18 @@ def main():
       "financeEvents":macro_events(),
       "lifeEvents":life_events(),
       "travelPromos":travel_promos(),
+      "corporateEvents":corporate_events(),
       "sources":{
         "news":"LineNofity source pool adapted for dashboard: Reuters/Google News, CNBC, Yahoo Finance, MarketWatch, BBC, AP, TechCrunch, The Verge, Ars.",
         "calendar":"BLS official calendar + Federal Reserve FOMC calendar.",
         "life":"Official organizer/venue links curated for upcoming Bangkok events.",
-        "travel":"Provider promo/deal discovery; verify net price and eligibility at checkout."
+        "travel":"Provider promo/deal discovery; verify net price and eligibility at checkout.",
+        "corporateEvents":"Nasdaq earnings/dividend calendars plus recent public corporate-action news signals. Confirm filings before trading."
       }
     }
     with open("dashboard-data.json","w",encoding="utf-8") as f:json.dump(data,f,ensure_ascii=False,indent=2)
     with open("dashboard-data.js","w",encoding="utf-8") as f:
         f.write("window.DASHBOARD_DATA=");json.dump(data,f,ensure_ascii=False,separators=(",",":"));f.write(";\n")
-    print(json.dumps({"dashboardUpdated":data["updated"],"topNews":len(data["news"].get("top",[])),"financeEvents":len(data["financeEvents"]),"lifeEvents":len(data["lifeEvents"]),"travelPromos":len(data["travelPromos"])},ensure_ascii=False))
+    print(json.dumps({"dashboardUpdated":data["updated"],"topNews":len(data["news"].get("top",[])),"financeEvents":len(data["financeEvents"]),"lifeEvents":len(data["lifeEvents"]),"travelPromos":len(data["travelPromos"]),"corporateEvents":len(data["corporateEvents"])},ensure_ascii=False))
 
 if __name__=="__main__":main()
