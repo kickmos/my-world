@@ -195,3 +195,40 @@ h2{font-size:20px}
   .future-card-head{align-items:stretch;flex-direction:column}
   .position-stack{justify-items:start;justify-content:start}
 }
+
+.rotation-card{margin-top:18px;padding:22px;border:1px solid #243b55;border-radius:24px;background:linear-gradient(160deg,#0b1a2b,#091522)}
+.rotation-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
+.rotation-note{margin:6px 0 0;color:var(--muted);font-size:11px;line-height:1.5;max-width:640px}
+.rotation-benchmark{min-width:180px;padding:12px 14px;border:1px solid #294662;border-radius:14px;background:#0c1b2a;text-align:right}
+.rotation-benchmark span{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.08em}
+.rotation-benchmark strong{display:block;margin-top:4px;font-size:12px}
+.rotation-highlights{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0 12px}
+.rotation-highlights article{padding:12px 14px;border:1px solid #213a52;border-radius:14px;background:#0b1928}
+.rotation-highlights span{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.08em}
+.rotation-highlights strong{display:block;margin-top:5px;font-size:13px}
+.rotation-legend{display:flex;gap:12px;flex-wrap:wrap;margin:4px 0 12px;color:var(--muted);font-size:10px}
+.rotation-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+.rotation-dot.leading{background:#35d07f}.rotation-dot.improving{background:#56b6ff}.rotation-dot.weakening{background:#f5b942}.rotation-dot.lagging{background:#ff6174}
+.sector-rotation-list{display:grid;gap:8px}
+.sector-row{display:grid;grid-template-columns:48px minmax(0,1fr);gap:10px;padding:12px;border:1px solid #1f344a;border-radius:14px;background:#091625}
+.sector-row.leading{box-shadow:inset 3px 0 0 #35d07f}.sector-row.improving{box-shadow:inset 3px 0 0 #56b6ff}.sector-row.weakening{box-shadow:inset 3px 0 0 #f5b942}.sector-row.lagging{box-shadow:inset 3px 0 0 #ff6174}
+.sector-rank{display:flex;align-items:flex-start;justify-content:center;padding-top:2px;font-size:14px;font-weight:900;color:#d9e8f4}
+.sector-name{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.sector-name>div{min-width:0}.sector-name strong{font-size:12px}.sector-name span{margin-left:6px;color:var(--muted);font-size:9px}
+.sector-status{margin-left:auto!important;padding:3px 7px;border:1px solid #29465f;border-radius:999px;font-size:8px!important;font-weight:900;letter-spacing:.05em}
+.leading .sector-status{color:#70e1a9;border-color:rgba(53,208,127,.34)}.improving .sector-status{color:#8ed0ff;border-color:rgba(86,182,255,.34)}.weakening .sector-status{color:#ffd27d;border-color:rgba(245,185,66,.34)}.lagging .sector-status{color:#ff98a3;border-color:rgba(255,97,116,.34)}
+.sector-bar{height:5px;margin:9px 0;border-radius:999px;background:#10263a;overflow:hidden}.sector-bar i{display:block;height:100%;border-radius:999px;background:#5ea9d0}
+.leading .sector-bar i{background:#35d07f}.improving .sector-bar i{background:#56b6ff}.weakening .sector-bar i{background:#f5b942}.lagging .sector-bar i{background:#ff6174}
+.sector-metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.sector-metrics span{padding:7px 8px;border:1px solid rgba(37,59,82,.65);border-radius:9px;background:#0a1826}
+.sector-metrics small{display:block;color:var(--muted);font-size:8px;margin-bottom:2px}.sector-metrics b{font-size:10px}
+.rank-move.up b{color:#58dc98}.rank-move.down b{color:#ff7e8c}.rank-move.flat b{color:#9fb4c8}
+.rotation-footnote{margin:12px 0 0;color:#6f8497;font-size:9px;line-height:1.45}
+.sector-empty{padding:18px;border:1px dashed #2a465f;border-radius:12px;color:var(--muted);font-size:11px}
+@media(max-width:760px){
+  .rotation-card{padding:16px;border-radius:20px}
+  .rotation-head{display:block}.rotation-benchmark{margin-top:12px;text-align:left;min-width:0}
+  .rotation-highlights{grid-template-columns:1fr}
+  .sector-row{grid-template-columns:40px minmax(0,1fr);padding:10px}
+  .sector-metrics{grid-template-columns:repeat(3,1fr)}
+}
