@@ -182,4 +182,48 @@ const futuresToggle=document.getElementById("futuresToggle");futuresToggle.addEv
 
 document.getElementById("routeList").innerHTML=(SNAPSHOT.routes||[]).map(r=>`<div class="route"><div><strong>${r.from} → ${r.to}</strong><br><span>Model route score ${r.score}/100</span></div><span class="badge ${r.type}">${r.type}</span></div>`).join("")||`<div class="route"><span>Waiting for live route model</span></div>`;
 
+function renderSectorRotation(){
+  const rot=SNAPSHOT.sectorRotation||{};
+  const sectors=rot.sectors||[];
+  const box=document.getElementById("sectorRotationList");
+  if(!box)return;
+  const leader=sectors.find(x=>x.rank===1);
+  const improving=(rot.improving||[])[0];
+  const spy=document.getElementById("rotationSpy");
+  if(spy)spy.textContent=`1D ${rot.benchmark1D>=0?"+":""}${(rot.benchmark1D??0).toFixed(2)}% · 5D ${rot.benchmark5D>=0?"+":""}${(rot.benchmark5D??0).toFixed(2)}%`;
+  const leaderEl=document.getElementById("rotationLeader");
+  if(leaderEl)leaderEl.textContent=leader?`#1 ${leader.ticker} · ${leader.name}`:"—";
+  const impEl=document.getElementById("rotationImproving");
+  if(impEl)impEl.textContent=improving?`${improving.ticker} · ${improving.rankChange>0?"↑"+improving.rankChange:"flat"}`:"—";
+  if(!sectors.length){
+    box.innerHTML='<div class="sector-empty">Waiting for sector rotation data</div>';
+    return;
+  }
+  box.innerHTML=sectors.map(s=>{
+    if(s.status==="UNAVAILABLE"){
+      return `<article class="sector-row unavailable"><div class="sector-rank">—</div><div class="sector-main"><div class="sector-name"><strong>${s.name}</strong><span>${s.ticker}</span></div><div class="sector-state">UNAVAILABLE</div></div></article>`;
+    }
+    const move=s.rankChange>0?`↑${s.rankChange}`:s.rankChange<0?`↓${Math.abs(s.rankChange)}`:"→";
+    const moveClass=s.rankChange>0?"up":s.rankChange<0?"down":"flat";
+    const score=Math.max(0,Math.min(100,Number(s.score||0)));
+    const sign=n=>Number(n)>=0?"+":"";
+    return `<article class="sector-row ${String(s.status||"").toLowerCase()}">
+      <div class="sector-rank">#${s.rank||"—"}</div>
+      <div class="sector-main">
+        <div class="sector-name"><div><strong>${s.name}</strong><span>${s.ticker}</span></div><span class="sector-status">${s.status}</span></div>
+        <div class="sector-bar"><i style="width:${score}%"></i></div>
+        <div class="sector-metrics">
+          <span><small>Score</small><b>${score.toFixed(1)}</b></span>
+          <span><small>1D</small><b>${sign(s.r1)}${Number(s.r1||0).toFixed(2)}%</b></span>
+          <span><small>5D</small><b>${sign(s.r5)}${Number(s.r5||0).toFixed(2)}%</b></span>
+          <span><small>RS vs SPY</small><b>${sign(s.rs5)}${Number(s.rs5||0).toFixed(2)}%</b></span>
+          <span><small>Volume</small><b>${Number(s.volumeRatio||0).toFixed(2)}×</b></span>
+          <span class="rank-move ${moveClass}"><small>Rank</small><b>${move}</b></span>
+        </div>
+      </div>
+    </article>`;
+  }).join("");
+}
+renderSectorRotation();
+
 if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}
