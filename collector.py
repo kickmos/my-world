@@ -11,8 +11,23 @@ import xml.etree.ElementTree as ET
 import zipfile
 from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone, timedelta
+from concurrent.futures import ThreadPoolExecutor
 
 UA = {"User-Agent": "Mozilla/5.0 capital-flow-monitor/2.0"}
+
+SECTOR_ETFS = {
+    "Technology": "XLK",
+    "Financials": "XLF",
+    "Energy": "XLE",
+    "Health Care": "XLV",
+    "Consumer Discretionary": "XLY",
+    "Consumer Staples": "XLP",
+    "Industrials": "XLI",
+    "Utilities": "XLU",
+    "Materials": "XLB",
+    "Real Estate": "XLRE",
+    "Communication Services": "XLC",
+}
 
 SYMBOLS = {
     "local": "THB=X",
@@ -104,8 +119,10 @@ def fetch_yahoo(symbol):
     p = float(meta.get("regularMarketPrice") or closes[-1])
     prev = float(closes[-2])
     d5base = float(closes[-6] if len(closes) >= 6 else closes[0])
+    d20base = float(closes[-21] if len(closes) >= 21 else closes[0])
     r1 = (p / prev - 1) * 100 if prev else 0.0
     r5 = (p / d5base - 1) * 100 if d5base else 0.0
+    r20 = (p / d20base - 1) * 100 if d20base else 0.0
     vr = 1.0
     if len(volumes) >= 6 and volumes[-1]:
         avg = sum(volumes[-6:-1]) / max(1, len(volumes[-6:-1]))
@@ -122,7 +139,7 @@ def fetch_yahoo(symbol):
             continue
         history.append({"ts": int(ts), "close": float(cl)})
     return {
-        "symbol": symbol, "price": p, "r1": r1, "r5": r5,
+        "symbol": symbol, "price": p, "r1": r1, "r5": r5, "r20": r20,
         "volume": (volumes[-1] if volumes and volumes[-1] not in (0, None) else None),
         "avg_volume_5d": avg_vol,
         "volume_ratio": vr, "market_time": meta.get("regularMarketTime"),
@@ -187,7 +204,7 @@ def safe_fetch(symbol):
     try:
         return fetch_yahoo(symbol)
     except Exception as e:
-        return {"symbol": symbol, "error": str(e), "r1": 0.0, "r5": 0.0, "volume_ratio": 1.0, "source": "unavailable"}
+        return {"symbol": symbol, "error": str(e), "r1": 0.0, "r5": 0.0, "r20": 0.0, "volume_ratio": 1.0, "source": "unavailable"}
 
 def fetch_fred(series_id):
     url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={urllib.parse.quote(series_id)}"
@@ -500,6 +517,103 @@ def safe_news(query, limit=8):
             "trusted": False,
             "error": str(e),
         }]
+
+
+def _hist_return(m, end_offset, lookback):
+    hist = m.get("history") or []
+    closes = [x.get("close") for x in hist if x.get("close") is not None]
+    if not closes:
+        return 0.0
+    end_index = len(closes) - 1 - end_offset
+    start_index = end_index - lookback
+    if end_index < 0 or start_index < 0:
+        return 0.0
+    end = closes[end_index]
+    start = closes[start_index]
+    return (end / start - 1) * 100 if start else 0.0
+
+def _rotation_state(rs5, accel):
+    if rs5 >= 0 and accel >= 0:
+        return "LEADING"
+    if rs5 < 0 and accel >= 0:
+        return "IMPROVING"
+    if rs5 >= 0 and accel < 0:
+        return "WEAKENING"
+    return "LAGGING"
+
+def sector_rotation():
+    symbols = ["SPY"] + list(SECTOR_ETFS.values())
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        fetched = list(ex.map(safe_fetch, symbols))
+    data = dict(zip(symbols, fetched))
+    spy = data.get("SPY", {})
+    sectors = []
+
+    for name, ticker in SECTOR_ETFS.items():
+        m = data.get(ticker, {})
+        if m.get("error"):
+            sectors.append({
+                "name":name,"ticker":ticker,"status":"UNAVAILABLE","score":50,
+                "rank":None,"rankChange":None,"error":m.get("error")
+            })
+            continue
+
+        rs1 = m.get("r1",0) - spy.get("r1",0)
+        rs5 = m.get("r5",0) - spy.get("r5",0)
+        rs20 = m.get("r20",0) - spy.get("r20",0)
+        accel = rs1 - rs5 / 5.0
+        vol = m.get("volume_ratio",1.0)
+
+        raw = 50 + rs5*5.5 + rs20*2.2 + accel*7.0 + (vol-1)*7.0
+        score = round(clamp(raw,0,100),1)
+        state = _rotation_state(rs5, accel)
+
+        # Previous-session score uses historical price structure so rank migration
+        # does not depend on the current day's move.
+        prev_r1 = _hist_return(m,1,1)
+        prev_r5 = _hist_return(m,1,5)
+        prev_r20 = _hist_return(m,1,20)
+        spy_prev_r1 = _hist_return(spy,1,1)
+        spy_prev_r5 = _hist_return(spy,1,5)
+        spy_prev_r20 = _hist_return(spy,1,20)
+        prev_rs1 = prev_r1 - spy_prev_r1
+        prev_rs5 = prev_r5 - spy_prev_r5
+        prev_rs20 = prev_r20 - spy_prev_r20
+        prev_accel = prev_rs1 - prev_rs5/5.0
+        prev_score = clamp(50 + prev_rs5*5.5 + prev_rs20*2.2 + prev_accel*7.0,0,100)
+
+        sectors.append({
+            "name":name,"ticker":ticker,"status":state,"score":score,
+            "r1":round(m.get("r1",0),2),"r5":round(m.get("r5",0),2),"r20":round(m.get("r20",0),2),
+            "rs1":round(rs1,2),"rs5":round(rs5,2),"rs20":round(rs20,2),
+            "acceleration":round(accel,2),"volumeRatio":round(vol,2),
+            "previousScore":round(prev_score,1),
+            "price":m.get("price")
+        })
+
+    available = [x for x in sectors if x.get("status") != "UNAVAILABLE"]
+    current_sorted = sorted(available,key=lambda x:x["score"],reverse=True)
+    previous_sorted = sorted(available,key=lambda x:x["previousScore"],reverse=True)
+    prev_rank = {x["ticker"]:i+1 for i,x in enumerate(previous_sorted)}
+    for i,x in enumerate(current_sorted,1):
+        x["rank"]=i
+        x["previousRank"]=prev_rank.get(x["ticker"])
+        x["rankChange"]=(x["previousRank"]-i) if x.get("previousRank") else 0
+
+    unavailable = [x for x in sectors if x.get("status") == "UNAVAILABLE"]
+    ordered = current_sorted + unavailable
+    leaders = [x for x in ordered if x.get("status")=="LEADING"][:4]
+    improving = sorted([x for x in ordered if x.get("status")=="IMPROVING"],key=lambda x:(x.get("rankChange",0),x.get("score",0)),reverse=True)[:4]
+    return {
+        "benchmark":"SPY",
+        "benchmark1D":round(spy.get("r1",0),2),
+        "benchmark5D":round(spy.get("r5",0),2),
+        "benchmark20D":round(spy.get("r20",0),2),
+        "sectors":ordered,
+        "leaders":leaders,
+        "improving":improving,
+        "methodology":"Score blends 5D/20D relative strength vs SPY, relative acceleration and volume participation. Rank change compares with prior-session price structure."
+    }
 
 def score_market(m):
     if m.get("error"):
@@ -961,6 +1075,7 @@ def main():
     fred = {key: safe_fred(series) for key, series in FRED_SERIES.items()}
     stable = safe_stablecoins()
     history_seed = load_previous_history()
+    rotation = sector_rotation()
     yahoo_fut_quotes = safe_yahoo_quote_snapshot([SYMBOLS[k] for k in ("nq","es","zn","gc","btcf","dxy")])
     if yahoo_fut_quotes.get("_error"):
         fallback_error = yahoo_fut_quotes.get("_error")
@@ -1089,6 +1204,7 @@ def main():
         "mode":"live-free-proxy-v3",
         "regime":regime,"riskScore":risk_score,"liquidityScore":liquidity_score,
         "dominantRoute":dominant,"stations":stations,"routes":top_routes,
+        "sectorRotation":rotation,
         "macro":{
             "riskConfirmation":round(ctx["risk_confirmation"],1),
             "stablecoinLiquidity":round(ctx["crypto_liquidity"],1),
@@ -1118,6 +1234,7 @@ def main():
         "t":snapshot["generatedAt"],"risk":risk_score,"liquidity":liquidity_score,
         "regime":regime,
         "scores":{s["id"]:s["market"]["score"] for s in stations},
+        "sectorRanks":{x["ticker"]:x.get("rank") for x in rotation.get("sectors",[]) if x.get("rank")},
         "futures":{
             key:{
                 "openInterest":futpos.get(key,{}).get("dailyOI"),
@@ -1143,7 +1260,9 @@ def main():
         "dailyOiQuotes":sum(1 for k in ("nq","es","zn","gc","btcf","dxy") if (yahoo_fut_quotes.get(SYMBOLS[k]) or {}).get("openInterest") is not None),
         "dailyOiSource":"Yahoo authenticated quote with chart fallback",
         "dailyOiFallbackError":yahoo_fut_quotes.get("_fallbackError"),
-        "cmeDailyDisabled":True
+        "cmeDailyDisabled":True,
+        "sectorRotationAvailable":sum(1 for x in rotation.get("sectors",[]) if x.get("status")!="UNAVAILABLE"),
+        "sectorLeader":rotation.get("sectors",[{}])[0].get("ticker") if rotation.get("sectors") else None
     },ensure_ascii=False))
 
 if __name__ == "__main__":
